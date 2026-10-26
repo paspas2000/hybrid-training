@@ -1,12 +1,13 @@
 'use strict';
 // Increase VERSION whenever any app-shell file changes.
-const VERSION = 'v2.1.1';
+const VERSION = 'v2.1.2';
 const PREFIX = 'hybrid-training:' + self.registration.scope + ':';
 const CACHE = PREFIX + VERSION;
 const SHELL = ['./', './index.html', './styles.css', './data.js', './db.js', './model.js', './app.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 const ASSETS = new Set(SHELL.map(path => new URL(path, self.registration.scope).href));
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
+  // Ignore the browser's HTTP cache when a new worker warms its offline shell.
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL.map(path => new Request(path, { cache: 'reload' })))));
   // Updates wait until the user explicitly accepts, protecting the current editing session.
 });
 self.addEventListener('activate', event => {
