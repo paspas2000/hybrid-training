@@ -46,6 +46,7 @@
       tx.objectStore('history').add(workout);
       tx.objectStore('settings').delete('draft');
     }),
+    deleteWorkout: id => transaction(['history'], 'readwrite', tx => tx.objectStore('history').delete(id)),
     import: (history, draft, catalog) => transaction(['history', 'settings'], 'readwrite', tx => {
       history.forEach(workout => tx.objectStore('history').add(workout));
       if (draft) tx.objectStore('settings').put(draft, 'draft');

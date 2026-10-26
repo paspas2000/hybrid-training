@@ -51,7 +51,10 @@
           return clean;
         }).filter(clean => incomplete || filled(clean));
         count++;
-        return { id, exerciseId: str(exercise.exerciseId, 150, 'ID каталога', true), name: str(exercise.name, 100, 'Название', true), note: str(exercise.note ?? '', 2000, 'Заметка упражнения'), records };
+        const clean = { id, exerciseId: str(exercise.exerciseId, 150, 'ID каталога', true), name: str(exercise.name, 100, 'Название', true), note: str(exercise.note ?? '', 2000, 'Заметка упражнения'), records };
+        const variant = str(exercise.variant ?? '', 100, 'Вариант выполнения').trim();
+        if (variant) clean.variant = variant;
+        return clean;
       });
       out.sections.push({ id: section.id, exercises });
     });
@@ -93,7 +96,7 @@
     const values = key => records.map(r => Number(r[key])).filter((n, i) => rHas(records[i], key) && Number.isFinite(n));
     const sum = key => values(key).reduce((a, b) => a + b, 0);
     const max = key => Math.max(...values(key));
-    const result = {};
+    const result = { setsCount: records.length };
     for (const key of keys) if (values(key).length) result[key === 'weightKg' || key === 'addedWeightKg' ? key + 'Max' : key + 'Sum'] = key === 'weightKg' || key === 'addedWeightKg' ? max(key) : sum(key);
     const volume = records.filter(r => rHas(r, 'weightKg') && rHas(r, 'reps')).reduce((total, r) => total + Number(r.weightKg) * Number(r.reps), 0);
     if (records.some(r => rHas(r, 'weightKg') && rHas(r, 'reps'))) result.volume = volume;
@@ -102,5 +105,18 @@
     return result;
   }
   const rHas = (r, key) => r[key] !== undefined && r[key] !== null && r[key] !== '';
-  Hybrid.model = { fields, keys, uid, today, empty, validate, legacy, filled, metrics };
+  function dailyMetrics(workouts, exerciseId, variant = '') {
+    const days = new Map();
+    for (const workout of workouts) {
+      for (const section of workout.sections) {
+        for (const exercise of section.exercises) {
+          if (exercise.exerciseId !== exerciseId || (variant && (exercise.variant || '') !== variant)) continue;
+          if (!days.has(workout.date)) days.set(workout.date, []);
+          days.get(workout.date).push(...exercise.records);
+        }
+      }
+    }
+    return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, records]) => ({ date, metrics: metrics({ records }) }));
+  }
+  Hybrid.model = { fields, keys, uid, today, empty, validate, legacy, filled, metrics, dailyMetrics };
 })();
