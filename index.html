@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#142b26">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Гибрид">
+  <meta name="description" content="Четыре направления. Одна тренировка. Личный офлайн-дневник.">
+  <title>Гибрид — дневник тренировок</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./data.js" defer></script>
+  <script src="./db.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./" aria-label="Гибрид, главная"><span class="brand-mark">г<span>↗</span></span> гибрид<span class="brand-dot">.</span></a><span id="connection" class="connection">Локальный дневник</span></header>
+  <main>
+    <div id="storage-error" class="notice error" role="alert" hidden></div>
+    <div id="update-banner" class="notice" hidden>Доступна новая версия. Черновик сохранён автоматически. <button id="update-app" class="text-button">Обновить</button></div>
+    <section id="today-view" class="view" aria-labelledby="today-title">
+      <div class="hero"><div><p class="eyebrow">ТВОЯ ПРАКТИКА / КАЖДЫЙ ДЕНЬ</p><h1 id="today-title">Развивай<br>все стороны<span>.</span></h1><p class="hero-copy">Навык, сила, работа и выносливость.<br>Собери свой баланс на сегодня.</p></div><div class="hero-art" aria-hidden="true"><span></span><span></span><span></span><span></span><b>04</b></div></div>
+      <div class="session-bar"><label class="date-label">ТРЕНИРОВКА НА <input id="workout-date" type="date" required aria-label="Дата тренировки"></label><span id="save-state" role="status">Загрузка…</span></div>
+      <div id="sections" class="sections"></div>
+      <section class="session-note"><label for="workout-note">Заметка о тренировке</label><textarea id="workout-note" rows="2" maxlength="2000" placeholder="Самочувствие, фокус, что получилось…"></textarea></section>
+      <div class="finish-card"><div><strong id="exercise-total">0 упражнений</strong><p>Не обязательно заполнять все четыре секции.</p></div><button id="finish" class="primary" disabled>Завершить <span aria-hidden="true">↗</span></button></div>
+      <button id="clear-draft" class="text-button quiet" disabled>Очистить черновик</button>
+    </section>
+    <section id="history-view" class="view" aria-labelledby="history-title" hidden><p class="eyebrow">ТО, ЧТО УЖЕ СДЕЛАНО</p><h1 id="history-title">Твоя история<span>.</span></h1><p class="subheading">Каждая тренировка — ещё один шаг.</p><div id="history-summary" class="history-summary"></div><div id="history-list"></div></section>
+    <section id="data-view" class="view" aria-labelledby="data-title" hidden><p class="eyebrow">ВСЁ НА ТВОЁМ УСТРОЙСТВЕ</p><h1 id="data-title">Твои данные<span>.</span></h1><p class="subheading">Без аккаунта. Без синхронизации. Под твоим контролем.</p><article class="panel"><span class="panel-icon" aria-hidden="true">↓</span><h2>Резервная копия</h2><p>Экспортируй историю и текущий черновик в JSON. Сохрани файл в «Файлы» или iCloud Drive.</p><button id="export" class="primary">Скачать JSON</button><p id="backup-info" class="muted"></p></article><article class="panel"><span class="panel-icon" aria-hidden="true">↑</span><h2>Восстановить из файла</h2><p>История объединится с текущей. Одинаковые записи не дублируются. Текущий непустой черновик останется на месте.</p><label class="secondary file-button">Выбрать JSON<input id="import-file" type="file" accept="application/json,.json"></label><div id="import-preview" class="import-preview" hidden></div></article><article class="panel tip"><h2>На главный экран iPhone</h2><p>Открой сайт в Safari → «Поделиться» → «На экран Домой». Один раз запусти с интернетом и дождись отметки «Офлайн готов».</p><p>История хранится в IndexedDB этого браузера. Очистка данных сайта удалит её. Регулярно сохраняй JSON. При смене адреса сайта или устройства перенеси данные через экспорт и импорт.</p></article><p class="version">ГИБРИД / v1.0 · Сделано для твоей практики</p></section>
+    <noscript><p class="notice error">Для дневника нужно включить JavaScript.</p></noscript>
+  </main>
+  <nav class="bottom-nav" aria-label="Разделы"><button data-view="today" class="active" aria-current="page"><span aria-hidden="true">▦</span>Сегодня</button><button data-view="history"><span aria-hidden="true">◷</span>История</button><button data-view="data"><span aria-hidden="true">⇅</span>Данные</button></nav>
+  <dialog id="picker" aria-labelledby="picker-title"><div class="dialog-head"><div><p class="eyebrow">ДОБАВИТЬ В ТРЕНИРОВКУ</p><h2 id="picker-title"></h2></div><button id="close-picker" class="icon-button" aria-label="Закрыть">×</button></div><label class="search-label" for="exercise-search">Найти упражнение</label><input id="exercise-search" type="search" placeholder="Название упражнения…" autocomplete="off"><div id="exercise-options"></div><form id="custom-form"><label for="custom-name">Или своё упражнение</label><div class="custom-row"><input id="custom-name" maxlength="100" placeholder="Название" required><button class="secondary" type="submit">Добавить</button></div></form></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
