@@ -32,6 +32,17 @@ window.Hybrid = {
   ],
   retiredIds: ['circuit'],
   bodyweightIds: ['pullup', 'dip', 'pushup'],
+  equipmentLabels: [['all', 'Любой инвентарь'], ['bodyweight', 'Без снаряда'], ['barbell', 'Штанга'], ['kettlebell', 'Гиря'], ['load', 'Грузы / гантели'], ['machine', 'Тренажёр'], ['sandbag', 'Мешок / сани'], ['other', 'Другое']],
+  equipment: {
+    'broad-jump':'bodyweight',sprint:'bodyweight','kb-snatch':'kettlebell',clean:'barbell',handstand:'bodyweight',medball:'other',
+    'barbell-snatch':'barbell','barbell-jerk':'barbell','clean-and-jerk':'barbell','kb-clean':'kettlebell','kb-jerk':'kettlebell','push-press':'barbell',
+    squat:'barbell',deadlift:'barbell',bench:'barbell',press:'barbell',pullup:'bodyweight',dip:'bodyweight',row:'barbell',pushup:'bodyweight',
+    'romanian-deadlift':'barbell','lat-pulldown':'machine','seated-row':'machine','hip-thrust':'barbell',
+    jump:'bodyweight',farmer:'load','sled-push':'sandbag','sled-pull':'sandbag',sandbag:'sandbag',burpee:'bodyweight','kb-swing':'kettlebell',
+    stepup:'bodyweight',ruck:'load','kb-goblet-squat':'kettlebell','sandbag-shoulder':'sandbag','loaded-hold':'load','overhead-carry':'load','battle-ropes':'other',
+    run:'bodyweight',bike:'other',rowing:'machine',swim:'other',walk:'bodyweight',ski:'machine',airbike:'machine','jump-rope':'other',
+    elliptical:'machine','xc-ski':'other','stair-climber':'machine'
+  },
   // These are editable starting fields. Every exercise can use every metric.
   presets: {
     'broad-jump': ['distanceM', 'reps'], sprint: ['durationSec', 'distanceM'],

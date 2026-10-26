@@ -40,6 +40,7 @@
       if (!bodyweightModes.includes(value.bodyweightMode)) throw new Error('Некорректный способ выполнения с собственным весом.');
       out.bodyweightMode = value.bodyweightMode;
     }
+    if (out.bodyweightMode && out.bodyweightMode !== 'weighted' && Number(out.addedWeightKg) > 0) throw new Error('Дополнительный вес не соответствует способу выполнения.');
     out.note = str(value.note ?? '', 1000, 'Заметка записи');
     return out;
   }
