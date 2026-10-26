@@ -31,6 +31,7 @@ window.Hybrid = {
     ]}
   ],
   retiredIds: ['circuit'],
+  bodyweightIds: ['pullup', 'dip', 'pushup'],
   // These are editable starting fields. Every exercise can use every metric.
   presets: {
     'broad-jump': ['distanceM', 'reps'], sprint: ['durationSec', 'distanceM'],

@@ -6,6 +6,8 @@
     ['distanceM', 'Дистанция', 'м'], ['rounds', 'Круги', '']
   ];
   const keys = fields.map(field => field[0]);
+  const weightBases = ['total', 'perHand', 'perImplement'];
+  const bodyweightModes = ['self', 'weighted', 'assisted'];
   const limits = { weightKg: 100000, addedWeightKg: 100000, reps: 100000, durationSec: 86400000, distanceM: 100000000, rounds: 100000 };
   const uid = () => crypto.randomUUID();
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -30,6 +32,14 @@
     if (!value || typeof value !== 'object') throw new Error('Некорректная запись.');
     const out = { id: str(value.id, 150, 'id записи', true) };
     keys.forEach(key => { const n = number(value[key], key, incomplete); if (n !== null) out[key] = n; });
+    if (value.weightBasis != null && value.weightBasis !== '') {
+      if (!weightBases.includes(value.weightBasis)) throw new Error('Некорректный способ указания веса.');
+      out.weightBasis = value.weightBasis;
+    }
+    if (value.bodyweightMode != null && value.bodyweightMode !== '') {
+      if (!bodyweightModes.includes(value.bodyweightMode)) throw new Error('Некорректный способ выполнения с собственным весом.');
+      out.bodyweightMode = value.bodyweightMode;
+    }
     out.note = str(value.note ?? '', 1000, 'Заметка записи');
     return out;
   }
@@ -98,25 +108,27 @@
     const max = key => Math.max(...values(key));
     const result = { setsCount: records.length };
     for (const key of keys) if (values(key).length) result[key === 'weightKg' || key === 'addedWeightKg' ? key + 'Max' : key + 'Sum'] = key === 'weightKg' || key === 'addedWeightKg' ? max(key) : sum(key);
-    const volume = records.filter(r => rHas(r, 'weightKg') && rHas(r, 'reps')).reduce((total, r) => total + Number(r.weightKg) * Number(r.reps), 0);
-    if (records.some(r => rHas(r, 'weightKg') && rHas(r, 'reps'))) result.volume = volume;
+    const volumeRecords = records.filter(r => rHas(r, 'weightKg') && rHas(r, 'reps'));
+    if (volumeRecords.length && volumeRecords.every(r => !r.weightBasis || r.weightBasis === 'total')) result.volume = volumeRecords.reduce((total, r) => total + Number(r.weightKg) * Number(r.reps), 0);
     const paceRecords = records.filter(r => Number(r.durationSec) > 0 && Number(r.distanceM) > 0);
     if (paceRecords.length) result.pace = paceRecords.reduce((a, r) => a + Number(r.durationSec), 0) / paceRecords.reduce((a, r) => a + Number(r.distanceM), 0) * 1000 / 60;
     return result;
   }
   const rHas = (r, key) => r[key] !== undefined && r[key] !== null && r[key] !== '';
-  function dailyMetrics(workouts, exerciseId, variant = '') {
+  function dailyMetrics(workouts, exerciseId, variant = '', weightBasis = null) {
     const days = new Map();
     for (const workout of workouts) {
       for (const section of workout.sections) {
         for (const exercise of section.exercises) {
           if (exercise.exerciseId !== exerciseId || (variant && (exercise.variant || '') !== variant)) continue;
+          const records = weightBasis === null ? exercise.records : exercise.records.filter(record => (record.weightBasis || '') === weightBasis);
+          if (!records.length) continue;
           if (!days.has(workout.date)) days.set(workout.date, []);
-          days.get(workout.date).push(...exercise.records);
+          days.get(workout.date).push(...records);
         }
       }
     }
     return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, records]) => ({ date, metrics: metrics({ records }) }));
   }
-  Hybrid.model = { fields, keys, uid, today, empty, validate, legacy, filled, metrics, dailyMetrics };
+  Hybrid.model = { fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, filled, metrics, dailyMetrics };
 })();
