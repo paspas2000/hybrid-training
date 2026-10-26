@@ -21,7 +21,7 @@ function saveDraft(){if(!ready)return;$('#save-state').textContent='Сохран
 function saveCatalog(){const snapshot=clone(catalog);enqueue(()=>db.catalog(snapshot)).catch(storageError)}
 function plural(n,words){return words[n%10===1&&n%100!==11?0:n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?1:2]}
 function updateTotal(){const n=count(draft);$('#exercise-total').textContent=n+' '+plural(n,['упражнение','упражнения','упражнений']);$('#finish').disabled=!ready||busy||!n;$('#clear-draft').disabled=!ready||busy||empty(draft)}
-function setBusy(v){busy=v;document.querySelectorAll('#today-view input,#today-view textarea,#today-view button,#import-file,#confirm-import').forEach(e=>e.disabled=v||!ready);updateTotal()}
+function setBusy(v){busy=v;if(v)document.querySelectorAll('#today-view input,#today-view textarea,#today-view button,#import-file,#confirm-import').forEach(e=>e.disabled=true);else{renderToday();$('#import-file').disabled=!ready}updateTotal()}
 function definition(id,name){let d=catalog.find(x=>x.id===id);if(!d){d={id,name,sectionId:null,fields:Hybrid.presets[id]||['weightKg','reps'],distanceUnit:'m',volumeEnabled:false};catalog.push(d);saveCatalog()}return d}
 function visible(d){return d.fields.filter(k=>keys.includes(k))}
 function makeRecord(source){const r={id:uid(),note:source?.note||''};keys.forEach(k=>{if(source?.[k]!==undefined&&source[k]!=='')r[k]=source[k]});return r}
