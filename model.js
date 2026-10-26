@@ -48,6 +48,11 @@
     if (!value || value.schemaVersion !== 2 || !validDate(value.date) || !Array.isArray(value.sections) || value.sections.length !== Hybrid.sections.length) throw new Error('Некорректная структура тренировки.');
     const ids = new Set(); let count = 0;
     const out = { schemaVersion: 2, date: value.date, note: str(value.note, 2000, 'Заметка тренировки'), sections: [] };
+    if (value.sessionRpe != null && value.sessionRpe !== '') {
+      const effort = Number(value.sessionRpe);
+      if (!Number.isInteger(effort) || effort < 1 || effort > 10) throw new Error('Оценка сложности должна быть от 1 до 10.');
+      out.sessionRpe = effort;
+    }
     value.sections.forEach((section, index) => {
       if (section?.id !== Hybrid.sections[index].id || !Array.isArray(section.exercises)) throw new Error('Некорректная секция.');
       const exercises = section.exercises.map(exercise => {
