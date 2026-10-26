@@ -35,7 +35,7 @@ window.Hybrid = {
   presets: {
     'broad-jump': ['distanceM', 'reps'], sprint: ['durationSec', 'distanceM'],
     handstand: ['durationSec'], medball: ['weightKg', 'reps'],
-    jump: ['reps', 'durationSec'],
+    jump: ['reps'],
     pullup: ['reps', 'addedWeightKg'], dip: ['reps', 'addedWeightKg'], pushup: ['reps'],
     farmer: ['weightKg', 'distanceM'], sandbag: ['weightKg', 'distanceM'],
     'sled-push': ['weightKg', 'distanceM'], 'sled-pull': ['weightKg', 'distanceM'],

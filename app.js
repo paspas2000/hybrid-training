@@ -48,7 +48,7 @@ function renderExercise(exercise,section,index){
 }
 function renderRecord(exercise,r,index,def){
  const row=el('div','','record-row'),head=el('div','','record-head');head.append(el('strong','Запись '+(index+1)),btn('×',()=>{exercise.records.splice(index,1);saveDraft();renderToday()},'icon-button','Удалить запись '+(index+1)));row.append(head);
- const grid=el('div','','record-fields');visible(def).forEach(key=>{const[,label,unit]=names[key],factor=key==='durationSec'?60:key==='distanceM'&&def.distanceUnit==='km'?1000:1,wrap=el('label',label+(unit?', '+(key==='distanceM'&&def.distanceUnit==='km'?'км':unit):'')),input=document.createElement('input');input.type='number';input.min='0';input.step=key==='reps'||key==='rounds'?'1':'any';input.inputMode=key==='reps'||key==='rounds'?'numeric':'decimal';input.placeholder='—';input.value=r[key]===undefined||r[key]===''?'':String(Number(r[key])/factor);input.oninput=()=>{if(input.value==='')delete r[key];else r[key]=String(Number(input.value)*factor);saveDraft()};wrap.append(input);grid.append(wrap)});row.append(grid);
+ const grid=el('div','','record-fields');visible(def).forEach(key=>{const[,label,unit]=names[key],factor=key==='durationSec'?60:key==='distanceM'&&def.distanceUnit==='km'?1000:1,caption=key==='addedWeightKg'?'Доп. вес, кг (если есть)':label+(unit?', '+(key==='distanceM'&&def.distanceUnit==='km'?'км':unit):''),wrap=el('label',caption),input=document.createElement('input');input.type='number';input.min='0';input.step=key==='reps'||key==='rounds'?'1':'any';input.inputMode=key==='reps'||key==='rounds'?'numeric':'decimal';input.placeholder='—';input.value=r[key]===undefined||r[key]===''?'':String(Number(r[key])/factor);input.oninput=()=>{if(input.value==='')delete r[key];else r[key]=String(Number(input.value)*factor);saveDraft()};wrap.append(input);grid.append(wrap)});row.append(grid);
  const note=document.createElement('input');note.type='text';note.maxLength=1000;note.placeholder='Заметка к записи';note.value=r.note||'';note.setAttribute('aria-label','Заметка к записи '+(index+1));note.oninput=()=>{r.note=note.value;saveDraft()};row.append(note);return row
 }
 function openPicker(section){pickerSection=section;$('#picker-title').textContent=section.title;$('#exercise-search').value='';$('#custom-name').value='';renderPicker();$('#picker').showModal()}
@@ -176,7 +176,7 @@ function renderExerciseStats(){
  metric.replaceChildren();
  Object.entries(metricNames).filter(([key])=>available.has(key)&&(key!=='volume'||def.volumeEnabled)).forEach(([key,label])=>metric.add(new Option(label,key)));
  metric.value=[...metric.options].some(option=>option.value===previous)?previous:metric.options[0]?.value||'';
- const key=metric.value,points=days.filter(day=>day.metrics[key]!==undefined).map(day=>({label:day.date.slice(8)+'.'+day.date.slice(5,7),value:chartValue(key,day.metrics[key])}));
+ const key=metric.value,points=days.map(day=>({label:day.date.slice(8)+'.'+day.date.slice(5,7),value:chartValue(key,day.metrics[key])}));
  if(points.length)graph.append(makeChart(metricNames[key]+' по дням',points));
  else graph.append(el('p','Для выбранной метрики пока нет данных.','muted'));
  const entries=sorted().flatMap(w=>matches(w,id).filter(e=>!variant||(e.variant||'')===variant).map(e=>({date:w.date,exercise:e})));
