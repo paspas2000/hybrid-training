@@ -11,7 +11,7 @@
   const limits = { weightKg: 100000, addedWeightKg: 100000, reps: 100000, durationSec: 86400000, distanceM: 100000000, rounds: 100000 };
   const uid = () => crypto.randomUUID();
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-  const empty = () => ({ schemaVersion: 2, date: today(), note: '', sections: Hybrid.sections.map(s => ({ id: s.id, exercises: [] })) });
+  const empty = () => ({ schemaVersion: 2, date: today(), note: '', sections: Hybrid.sections.map(s => ({ id: s.id, exercises: [] })), groups: [] });
   const str = (value, max, name, required = false) => {
     if (typeof value !== 'string' || value.length > max || (required && !value.trim())) throw new Error(`Некорректное поле «${name}».`);
     return value;
@@ -53,6 +53,30 @@
       if (!Number.isInteger(effort) || effort < 1 || effort > 10) throw new Error('Оценка сложности должна быть от 1 до 10.');
       out.sessionRpe = effort;
     }
+    if (value.groups !== undefined) {
+      if (!Array.isArray(value.groups) || value.groups.length > 30) throw new Error('Некорректные группы упражнений.');
+      const groupIds = new Set();
+      const groups = value.groups.map(group => {
+        if (!group || typeof group !== 'object') throw new Error('Некорректная группа упражнений.');
+        const id = str(group.id, 150, 'ID группы', true);
+        if (groupIds.has(id)) throw new Error('Повторяющийся ID группы.');
+        groupIds.add(id);
+        const clean = { id, name: str(group.name, 100, 'Название группы', true), note: str(group.note ?? '', 1000, 'Заметка группы') };
+        if (group.rounds != null && group.rounds !== '') {
+          const rounds = Number(group.rounds);
+          if (!Number.isInteger(rounds) || rounds < 1 || rounds > 1000) throw new Error('Некорректное число кругов группы.');
+          clean.rounds = rounds;
+        }
+        if (group.restSec != null && group.restSec !== '') {
+          const restSec = Number(group.restSec);
+          if (!Number.isFinite(restSec) || restSec < 0 || restSec > 86400) throw new Error('Некорректный отдых группы.');
+          clean.restSec = restSec;
+        }
+        return clean;
+      });
+      if (groups.length) out.groups = groups;
+    }
+    const groupIds = new Set((out.groups || []).map(group => group.id));
     value.sections.forEach((section, index) => {
       if (section?.id !== Hybrid.sections[index].id || !Array.isArray(section.exercises)) throw new Error('Некорректная секция.');
       const exercises = section.exercises.map(exercise => {
@@ -69,6 +93,11 @@
         const clean = { id, exerciseId: str(exercise.exerciseId, 150, 'ID каталога', true), name: str(exercise.name, 100, 'Название', true), note: str(exercise.note ?? '', 2000, 'Заметка упражнения'), records };
         const variant = str(exercise.variant ?? '', 100, 'Вариант выполнения').trim();
         if (variant) clean.variant = variant;
+        if (exercise.groupId != null && exercise.groupId !== '') {
+          const groupId = str(exercise.groupId, 150, 'ID группы упражнения', true);
+          if (!groupIds.has(groupId)) throw new Error('Упражнение ссылается на отсутствующую группу.');
+          clean.groupId = groupId;
+        }
         return clean;
       });
       out.sections.push({ id: section.id, exercises });

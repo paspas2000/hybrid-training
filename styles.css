@@ -51,3 +51,12 @@
 .effort-label span{font-size:11px;font-weight:400;color:var(--muted)}
 #session-rpe{width:100%;max-width:270px;min-height:44px;border:1px solid var(--line);border-radius:9px;background:var(--white);color:var(--ink);padding:9px;font-size:14px}
 .effort-summary{font-size:12px;font-weight:700;color:var(--accent);margin:0 0 12px}
+.group-panel{margin:20px 0 0;padding:18px 20px;border:1px solid var(--line);border-radius:var(--radius);background:var(--white)}
+.group-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.group-panel h2{font-size:16px;margin:0 0 5px}.group-panel p{font-size:12px;line-height:1.5;color:var(--muted);margin:0}
+.group-panel .secondary{min-height:42px;padding:9px 12px;font-size:12px;white-space:nowrap}
+.group-card{border-top:1px solid var(--line);margin-top:14px;padding-top:10px}.group-card-head{display:flex;align-items:center;gap:12px}.group-card-head strong{flex:1;font-size:13px}.group-card-head .text-button{font-size:12px}.group-card-head .icon-button{font-size:22px}
+.group-tag{color:var(--accent);font-size:11px;font-weight:700;margin:4px 0 10px}.group-history{padding:10px 12px;border-radius:9px;background:var(--soft);font-size:12px;line-height:1.5}
+.group-field{display:grid;gap:7px;margin:12px 0;font-size:12px;font-weight:650}.group-field input{width:100%;min-height:44px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--white);font-size:16px;color:var(--ink)}
+.group-numbers{display:grid;grid-template-columns:1fr 1fr;gap:10px}.group-members{border:1px solid var(--line);border-radius:10px;margin:18px 0;padding:12px}.group-members legend{font-size:12px;font-weight:700;padding:0 5px}.group-member{display:flex;gap:9px;align-items:center;padding:9px 3px;font-size:13px}.group-member input{width:18px;height:18px;accent-color:var(--accent)}.error-text{font-size:12px;color:#862b20}
+@media(max-width:560px){.group-panel{padding:15px}.group-panel-head{align-items:flex-start}.group-panel .secondary{font-size:11px}.group-numbers{grid-template-columns:1fr}}
