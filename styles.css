@@ -39,4 +39,9 @@
 .workout-records{margin:12px 0;padding-left:22px;font-size:12px;line-height:1.55;color:var(--muted)}
 .workout-records li{margin:4px 0;overflow-wrap:anywhere}
 @media(max-width:560px){.history-actions{display:grid}.history-actions .danger{margin-left:0;text-align:left}}
-@media(max-width:560px){.section-number{display:none}.section-symbol{display:grid;order:-1;width:32px;height:32px}.section-symbol .ui-icon{width:18px;height:18px}}
+.section-card[data-section="skill"]{background:#edf1e8;border-color:#dce4d5}
+.section-card[data-section="strength"]{background:#f3ede7;border-color:#e7ddd3}
+.section-card[data-section="capacity"]{background:#eaeef1;border-color:#dbe3e8}
+.section-card[data-section="endurance"]{background:#e9f0ed;border-color:#d7e3dd}
+.section-card .exercise{background:var(--white)}
+@media(max-width:560px){.section-number{display:block}}
