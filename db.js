@@ -37,17 +37,27 @@
       const history = tx.objectStore('history').getAll();
       const draft = tx.objectStore('settings').get('draft');
       const backup = tx.objectStore('settings').get('backup');
-      return () => ({ history: history.result, draft: draft.result, backup: backup.result });
+      const catalog = tx.objectStore('settings').get('catalog');
+      const legacySnapshot = tx.objectStore('settings').get('legacySnapshot');
+      return () => ({ history: history.result, draft: draft.result, backup: backup.result, catalog: catalog.result, legacySnapshot: legacySnapshot.result });
     }),
     draft: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'draft')),
     finish: workout => transaction(['history', 'settings'], 'readwrite', tx => {
       tx.objectStore('history').add(workout);
       tx.objectStore('settings').delete('draft');
     }),
-    import: (history, draft) => transaction(['history', 'settings'], 'readwrite', tx => {
+    import: (history, draft, catalog) => transaction(['history', 'settings'], 'readwrite', tx => {
       history.forEach(workout => tx.objectStore('history').add(workout));
       if (draft) tx.objectStore('settings').put(draft, 'draft');
+      if (catalog) tx.objectStore('settings').put(catalog, 'catalog');
     }),
-    backup: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'backup'))
+    backup: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'backup')),
+    catalog: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'catalog')),
+    migrate: (history, draft, snapshot) => transaction(['history', 'settings'], 'readwrite', tx => {
+      const workouts = tx.objectStore('history'), settings = tx.objectStore('settings');
+      history.forEach(workout => workouts.put(workout));
+      if (draft) settings.put(draft, 'draft');
+      settings.put(snapshot, 'legacySnapshot');
+    })
   };
 })();

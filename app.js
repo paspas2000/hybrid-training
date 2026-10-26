@@ -1,386 +1,93 @@
 'use strict';
 (() => {
-  const $ = selector => document.querySelector(selector);
-  const { sections, db } = Hybrid;
-  const limits = { weight: 100000, sets: 10000, reps: 100000, time: 100000 };
-  const numericFields = ['weight', 'sets', 'reps', 'time'];
-  let history = [], draft = emptyDraft(), ready = false, busy = false, pickerSection;
-  let queue = Promise.resolve(), toastTimer, pendingImport, waitingWorker;
-  const clone = value => JSON.parse(JSON.stringify(value));
-  const uid = () => crypto.randomUUID();
-  function today() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
-  function emptyDraft() { return { date: today(), note: '', items: [] }; }
-  function isEmpty(value) { return !value.items.length && !value.note; }
-  function text(tag, value, className) {
-    const el = document.createElement(tag);
-    el.textContent = value;
-    if (className) el.className = className;
-    return el;
-  }
-  function dateLabel(value) { return new Date(value + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }); }
-  function result(item) {
-    const parts = [];
-    if (item.weight !== '') parts.push(`${item.weight} кг`);
-    if (item.sets !== '' && item.reps !== '') parts.push(`${item.sets} × ${item.reps}`);
-    else {
-      if (item.sets !== '') parts.push(`${item.sets} подх.`);
-      if (item.reps !== '') parts.push(`${item.reps} повт.`);
-    }
-    if (item.time !== '') parts.push(`${item.time} мин`);
-    return parts.join(' · ') || 'Выполнено';
-  }
-  function sortedHistory() { return [...history].sort((a, b) => b.date.localeCompare(a.date) || b.completedAt.localeCompare(a.completedAt)); }
-  function lastResult(exerciseId) {
-    for (const workout of sortedHistory()) {
-      const item = workout.items.find(entry => entry.exerciseId === exerciseId);
-      if (item) return `${dateLabel(workout.date)} — ${result(item)}${item.note ? ' · ' + item.note : ''}`;
-    }
-    return 'Первый результат — начало истории';
-  }
-  function toast(message) {
-    clearTimeout(toastTimer);
-    $('#toast').textContent = message;
-    $('#toast').hidden = false;
-    toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 5000);
-  }
-  function storageError(error) {
-    console.error(error);
-    $('#save-state').textContent = 'Не сохранено';
-    $('#storage-error').textContent = 'Не удалось прочитать или сохранить данные. Не закрывай страницу: экспортируй JSON во вкладке «Данные». Проверь свободное место и доступ браузера к хранилищу. ' + (error.message || '');
-    $('#storage-error').hidden = false;
-  }
-  function storageOK() { $('#storage-error').hidden = true; $('#save-state').textContent = 'Черновик сохранён'; }
-  // Every mutation waits for the preceding write. A failed write does not block export or a retry.
-  function enqueue(operation) {
-    const task = queue.then(operation);
-    queue = task.catch(() => {});
-    return task;
-  }
-  function saveDraft() {
-    if (!ready) return;
-    $('#save-state').textContent = 'Сохраняю…';
-    const snapshot = clone(draft);
-    enqueue(() => db.draft(snapshot)).then(storageOK).catch(storageError);
-  }
-  function setBusy(value) {
-    busy = value;
-    document.querySelectorAll('#today-view input, #today-view textarea, #today-view button, #import-file, #confirm-import').forEach(el => { el.disabled = value || !ready; });
-    updateTotal();
-  }
-  function updateTotal() {
-    const count = draft.items.length;
-    $('#exercise-total').textContent = `${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}`;
-    $('#finish').disabled = !ready || busy || !count;
-    $('#clear-draft').disabled = !ready || busy || isEmpty(draft);
-  }
-  function plural(n, words) { return words[n % 10 === 1 && n % 100 !== 11 ? 0 : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 1 : 2]; }
-  function renderToday() {
-    $('#workout-date').value = draft.date;
-    $('#workout-note').value = draft.note;
-    const container = $('#sections');
-    container.replaceChildren();
-    for (const section of sections) {
-      const card = document.createElement('section');
-      card.className = 'section-card'; card.dataset.section = section.id;
-      const head = text('div', '', 'section-head');
-      head.append(text('span', section.number, 'section-number'));
-      const title = text('div', '', 'section-text');
-      const heading = text('h2', section.title); heading.id = `heading-${section.id}`;
-      card.setAttribute('aria-labelledby', heading.id);
-      title.append(heading, text('p', section.subtitle));
-      const symbol = text('span', section.icon, 'section-symbol'); symbol.setAttribute('aria-hidden', 'true');
-      const add = text('button', '+ Добавить', 'add-button'); add.disabled = !ready || busy;
-      add.setAttribute('aria-label', `Добавить упражнение: ${section.title}`);
-      add.addEventListener('click', () => openPicker(section));
-      head.append(title, symbol, add); card.append(head);
-      const items = draft.items.filter(item => item.sectionId === section.id);
-      if (!items.length) card.append(text('div', 'Выбери упражнение для этого блока', 'empty-section'));
-      items.forEach(item => card.append(renderExercise(item)));
-      container.append(card);
-    }
-    updateTotal();
-  }
-  function renderExercise(item) {
-    const el = text('article', '', 'exercise'); el.dataset.item = item.id;
-    const head = text('div', '', 'exercise-title');
-    head.append(text('h3', item.name));
-    const remove = text('button', '×', 'icon-button'); remove.setAttribute('aria-label', `Убрать ${item.name}`);
-    remove.addEventListener('click', () => {
-      if (numericFields.some(key => item[key] !== '') || item.note) {
-        if (!confirm(`Убрать «${item.name}» и введённые результаты из черновика?`)) return;
-      }
-      draft.items = draft.items.filter(entry => entry.id !== item.id); saveDraft(); renderToday();
-    });
-    head.append(remove);
-    el.append(head, text('p', lastResult(item.exerciseId), 'last-result'));
-    const fields = text('div', '', 'fields');
-    const names = { weight: 'Вес, кг', sets: 'Подходы', reps: 'Повторы', time: 'Время, мин' };
-    for (const key of numericFields) {
-      const label = text('label', names[key]);
-      const input = document.createElement('input');
-      input.type = 'number'; input.min = '0'; input.max = String(limits[key]);
-      input.step = key === 'sets' || key === 'reps' ? '1' : 'any';
-      input.inputMode = key === 'sets' || key === 'reps' ? 'numeric' : 'decimal';
-      input.value = item[key]; input.placeholder = '—'; input.dataset.field = key;
-      input.setAttribute('aria-label', `${item.name}: ${names[key]}`);
-      input.addEventListener('input', () => { item[key] = input.value; saveDraft(); });
-      label.append(input); fields.append(label);
-    }
-    const note = document.createElement('textarea'); note.rows = 1; note.maxLength = 1000;
-    note.className = 'exercise-note'; note.placeholder = 'Заметка: дистанция, темп, отдых…';
-    note.setAttribute('aria-label', `${item.name}: заметка`); note.value = item.note;
-    note.addEventListener('input', () => { item.note = note.value; saveDraft(); });
-    el.append(fields, note); return el;
-  }
-  function openPicker(section) {
-    pickerSection = section;
-    $('#picker-title').textContent = section.title;
-    $('#exercise-search').value = ''; $('#custom-name').value = '';
-    renderPicker(); $('#picker').showModal();
-  }
-  function renderPicker() {
-    const container = $('#exercise-options'); container.replaceChildren();
-    const query = $('#exercise-search').value.toLocaleLowerCase('ru').trim();
-    // Retain custom exercises found in previous workouts for reuse and last-result lookup.
-    const catalog = new Map(pickerSection.exercises);
-    [...sortedHistory(), draft].forEach(workout => workout.items.filter(item => item.sectionId === pickerSection.id).forEach(item => { if (!catalog.has(item.exerciseId)) catalog.set(item.exerciseId, item.name); }));
-    for (const [id, name] of catalog) {
-      if (!name.toLocaleLowerCase('ru').includes(query)) continue;
-      const selected = draft.items.some(item => item.exerciseId === id);
-      const option = text('button', '', 'exercise-option');
-      option.append(text('span', name), text('span', selected ? 'Добавлено' : '+'));
-      option.disabled = selected;
-      option.addEventListener('click', () => addExercise(id, name)); container.append(option);
-    }
-    if (!container.children.length) container.append(text('p', 'Ничего не найдено. Можно добавить своё упражнение.', 'muted'));
-  }
-  function addExercise(exerciseId, name) {
-    if (!ready || busy) return;
-    if (draft.items.length >= 100) { toast('В тренировке может быть до 100 упражнений.'); return; }
-    if (draft.items.some(item => item.exerciseId === exerciseId)) { toast('Упражнение уже добавлено.'); return; }
-    draft.items.push({ id: uid(), exerciseId, sectionId: pickerSection.id, name, weight: '', sets: '', reps: '', time: '', note: '' });
-    saveDraft(); renderToday(); $('#picker').close();
-    const target = document.querySelector(`[data-section="${pickerSection.id}"] .add-button`);
-    target.focus({ preventScroll: true });
-  }
-  function renderHistory() {
-    const summary = $('#history-summary'); summary.replaceChildren(text('strong', String(history.length)), text('span', plural(history.length, ['тренировка сохранена', 'тренировки сохранены', 'тренировок сохранено'])));
-    const list = $('#history-list'); list.replaceChildren();
-    if (!history.length) {
-      const empty = text('div', '', 'empty-state');
-      empty.append(text('h2', 'Здесь начинается прогресс'), text('p', 'Собери и заверши первую тренировку. Здесь появятся её упражнения и результаты.'));
-      list.append(empty); return;
-    }
-    for (const workout of sortedHistory()) {
-      const card = document.createElement('details'); card.className = 'history-card';
-      const summaryEl = document.createElement('summary');
-      summaryEl.append(text('span', dateLabel(workout.date), 'history-date'), text('span', `${workout.items.length} ${plural(workout.items.length, ['упражнение', 'упражнения', 'упражнений'])}`, 'history-meta'));
-      const body = text('div', '', 'history-content');
-      for (const section of sections) {
-        const items = workout.items.filter(item => item.sectionId === section.id);
-        if (!items.length) continue;
-        body.append(text('h3', `${section.number} / ${section.title}`, 'history-section'));
-        items.forEach(item => {
-          const row = text('div', '', 'history-item'); row.append(text('strong', item.name), text('p', result(item)));
-          if (item.note) row.append(text('p', item.note, 'muted note-text'));
-          body.append(row);
-        });
-      }
-      if (workout.note) body.append(text('p', workout.note, 'note-text'));
-      card.append(summaryEl, body); list.append(card);
-    }
-  }
-  function switchView(name) {
-    document.querySelectorAll('.view').forEach(el => { el.hidden = el.id !== name + '-view'; });
-    document.querySelectorAll('[data-view]').forEach(button => {
-      const active = button.dataset.view === name;
-      button.classList.toggle('active', active);
-      if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
-    });
-    if (name === 'history') renderHistory();
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  }
-  function validDate(value) {
-    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-    const d = new Date(value + 'T12:00:00Z');
-    return !isNaN(d) && d.toISOString().slice(0, 10) === value;
-  }
-  function string(value, max, label, required = false) {
-    if (typeof value !== 'string' || value.length > max || (required && !value.trim())) throw new Error(`Некорректное поле «${label}».`);
-    return value;
-  }
-  function validateDraft(value, incomplete = false) {
-    if (!value || typeof value !== 'object' || !(validDate(value.date) || (incomplete && value.date === '')) || !Array.isArray(value.items) || value.items.length > 100) throw new Error('Некорректная структура тренировки.');
-    const ids = new Set(), exerciseIds = new Set();
-    const items = value.items.map(item => {
-      if (!item || !sections.some(section => section.id === item.sectionId)) throw new Error('Неизвестная секция упражнения.');
-      const clean = {
-        id: string(item.id, 150, 'id', true), exerciseId: string(item.exerciseId, 150, 'exerciseId', true),
-        sectionId: item.sectionId, name: string(item.name, 100, 'Название', true)
-      };
-      if (ids.has(clean.id) || exerciseIds.has(clean.exerciseId)) throw new Error('Повторяющееся упражнение в тренировке.');
-      ids.add(clean.id); exerciseIds.add(clean.exerciseId);
-      for (const key of numericFields) {
-        clean[key] = string(item[key], 30, key);
-        if (clean[key] !== '') {
-          const numeric = Number(clean[key]);
-          const syntax = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(clean[key]);
-          if (!syntax || !Number.isFinite(numeric) || (!incomplete && (numeric < 0 || numeric > limits[key] || ((key === 'sets' || key === 'reps') && !Number.isInteger(numeric))))) throw new Error('Некорректное числовое значение.');
-        }
-      }
-      clean.note = string(item.note, 1000, 'Заметка упражнения'); return clean;
-    });
-    return { date: value.date, note: string(value.note, 2000, 'Заметка'), items };
-  }
-  function validateWorkout(value) {
-    const workout = validateDraft(value);
-    if (!workout.items.length || typeof value.completedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value.completedAt) || isNaN(Date.parse(value.completedAt))) throw new Error('Некорректная завершённая тренировка.');
-    return { id: string(value.id, 150, 'id тренировки', true), ...workout, completedAt: new Date(value.completedAt).toISOString() };
-  }
-  function validateBackup(value) {
-    if (!value || value.app !== 'hybrid-training' || value.schemaVersion !== 1 || !Array.isArray(value.history) || value.history.length > 10000) throw new Error('Нужен JSON-экспорт приложения «Гибрид», версия формата 1.');
-    const history = value.history.map(validateWorkout), ids = new Set();
-    for (const workout of history) { if (ids.has(workout.id)) throw new Error('В файле повторяются ID тренировок.'); ids.add(workout.id); }
-    return { history, draft: value.draft == null ? null : validateDraft(value.draft, true) };
-  }
-  function planImport(backup, current) {
-    const byId = new Map(current.history.map(workout => [workout.id, validateWorkout(workout)]));
-    const added = [];
-    let skipped = 0;
-    for (const workout of backup.history) {
-      const old = byId.get(workout.id);
-      if (!old) added.push(workout);
-      else if (JSON.stringify(old) === JSON.stringify(workout)) skipped++;
-      else throw new Error('Конфликт: тренировки с одинаковым ID отличаются. Импорт отменён, данные не изменены.');
-    }
-    return { added, skipped, draft: backup.draft && (!current.draft || isEmpty(current.draft)) ? backup.draft : null };
-  }
-  async function finish() {
-    if (!ready || busy || !draft.items.length) return;
-    const inputs = [...document.querySelectorAll('#today-view input')];
-    const invalid = inputs.find(input => !input.checkValidity());
-    if (invalid) { invalid.reportValidity(); return; }
-    let workout;
-    try { workout = validateWorkout({ id: uid(), ...clone(draft), completedAt: new Date().toISOString() }); }
-    catch (error) { toast(error.message); return; }
-    setBusy(true);
-    try {
-      await enqueue(() => db.finish(workout));
-      history.push(workout); draft = emptyDraft(); renderToday(); storageOK();
-      switchView('history'); toast('Тренировка сохранена. Хорошая работа!');
-    } catch (error) { storageError(error); }
-    finally { setBusy(false); }
-  }
-  async function exportData() {
-    if (busy) return;
-    // Include the current in-memory draft even if the last IndexedDB write failed.
-    const backup = { app: 'hybrid-training', schemaVersion: 1, exportedAt: new Date().toISOString(), history: clone(history), draft: clone(draft) };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob), link = document.createElement('a');
-    link.href = url; link.download = `hybrid-training-${today()}.json`; document.body.append(link); link.click(); link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    $('#backup-info').textContent = 'Экспорт подготовлен. Сохрани скачанный файл в надёжном месте.';
-    if (ready) enqueue(() => db.backup(new Date().toISOString())).catch(storageError);
-  }
-  async function previewImport(event) {
-    const file = event.target.files[0]; event.target.value = '';
-    pendingImport = null;
-    const preview = $('#import-preview'); preview.replaceChildren(); preview.hidden = true;
-    if (!file || !ready || busy) return;
-    try {
-      if (file.size > 10 * 1024 * 1024) throw new Error('Файл слишком большой: максимум 10 МБ.');
-      const backup = validateBackup(JSON.parse(await file.text()));
-      await queue;
-      const current = await db.read();
-      const plan = planImport(backup, { history: current.history, draft });
-      pendingImport = backup;
-      preview.append(text('p', `Новых тренировок: ${plan.added.length}. Уже есть: ${plan.skipped}.${plan.draft ? ' Черновик будет восстановлен.' : ' Текущий черновик сохранится.'}`));
-      const button = text('button', 'Импортировать', 'primary'); button.id = 'confirm-import';
-      button.addEventListener('click', applyImport); preview.append(button); preview.hidden = false;
-    } catch (error) {
-      preview.append(text('p', error instanceof SyntaxError ? 'Не удалось прочитать JSON. Выбери файл экспорта приложения.' : error.message));
-      preview.hidden = false;
-    }
-  }
-  async function applyImport() {
-    if (!pendingImport || busy || !ready) return;
-    setBusy(true);
-    try {
-      const backup = pendingImport;
-      const plan = await enqueue(async () => {
-        const current = await db.read();
-        const plan = planImport(backup, { history: current.history, draft });
-        await db.import(plan.added, plan.draft);
-        history = [...current.history, ...plan.added];
-        return plan;
-      });
-      if (plan.draft) draft = plan.draft;
-      pendingImport = null; $('#import-preview').hidden = true;
-      renderToday(); renderHistory(); storageOK(); toast(`Импорт завершён. Добавлено тренировок: ${plan.added.length}.`);
-    } catch (error) { toast(error.message); }
-    finally { setBusy(false); }
-  }
-  function setupWorker() {
-    if (!('serviceWorker' in navigator)) { $('#connection').textContent = 'Офлайн недоступен'; return; }
-    let registration;
-    function updateConnection() {
-      if (!navigator.onLine) $('#connection').textContent = navigator.serviceWorker.controller ? 'Без сети · офлайн' : 'Без сети';
-      else $('#connection').textContent = navigator.serviceWorker.controller ? 'Офлайн готов' : 'Готовим офлайн…';
-    }
-    navigator.serviceWorker.addEventListener('controllerchange', updateConnection);
-    window.addEventListener('online', updateConnection); window.addEventListener('offline', updateConnection);
-    navigator.serviceWorker.register('./service-worker.js').then(reg => {
-      registration = reg;
-      const showUpdate = () => {
-        if (registration.waiting && navigator.serviceWorker.controller) {
-          waitingWorker = registration.waiting; $('#update-banner').hidden = false;
-        }
-      };
-      showUpdate();
-      reg.addEventListener('updatefound', () => {
-        const worker = reg.installing;
-        if (worker) worker.addEventListener('statechange', showUpdate);
-      });
-      updateConnection();
-    }).catch(error => { console.error(error); $('#connection').textContent = 'Офлайн недоступен'; });
-    $('#update-app').addEventListener('click', async () => {
-      if (!waitingWorker || busy || !ready) return;
-      setBusy(true);
-      try {
-        await enqueue(() => db.draft(clone(draft)));
-        navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
-        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
-      } catch (error) { storageError(error); setBusy(false); }
-    });
-  }
-  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.view)));
-  $('#close-picker').addEventListener('click', () => $('#picker').close());
-  $('#exercise-search').addEventListener('input', renderPicker);
-  $('#custom-form').addEventListener('submit', event => {
-    event.preventDefault(); const name = $('#custom-name').value.trim();
-    if (!name) return;
-    // Stable section + normalized name makes last results reusable across days.
-    const normalized = name.toLocaleLowerCase('ru').replace(/\s+/g, ' ');
-    const match = pickerSection.exercises.find(([, value]) => value.toLocaleLowerCase('ru') === normalized);
-    addExercise(match ? match[0] : 'custom:' + pickerSection.id + ':' + normalized, name);
+const $=s=>document.querySelector(s), {sections,db,model}=Hybrid, {fields,keys,uid}=model;
+const clone=x=>JSON.parse(JSON.stringify(x)), names=Object.fromEntries(fields.map(f=>[f[0],f]));
+const metricNames={weightKgMax:'Максимальный вес, кг',addedWeightKgMax:'Максимальный доп. вес, кг',repsSum:'Повторения',durationSecSum:'Время, мин',distanceMSum:'Дистанция, км',roundsSum:'Круги',volume:'Объём, кг × повт.',pace:'Темп, мин/км'};
+let history=[],draft=model.empty(),catalog=[],legacySnapshot,ready=false,busy=false,pickerSection,pendingImport,waitingWorker,queue=Promise.resolve(),toastTimer;
+const el=(tag,value='',className='')=>{const e=document.createElement(tag);e.textContent=value;e.className=className;return e};
+const btn=(value,action,className='text-button',aria='')=>{const e=el('button',value,className);e.type='button';if(aria)e.setAttribute('aria-label',aria);e.onclick=action;return e};
+const count=w=>w.sections.reduce((n,s)=>n+s.exercises.length,0),empty=w=>!count(w)&&!w.note;
+const sorted=()=>[...history].sort((a,b)=>b.date.localeCompare(a.date)||b.completedAt.localeCompare(a.completedAt));
+const dateLabel=s=>new Date(s+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});
+const fmt=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n);
+const matches=(w,id)=>w.sections.flatMap(s=>s.exercises).filter(e=>e.exerciseId===id);
+function latest(id){for(const w of sorted()){const found=matches(w,id);if(found.length)return{workout:w,exercise:found[found.length-1]}}return null}
+function result(r){return fields.filter(([key])=>r[key]!==undefined&&r[key]!=='').map(([key,label,unit])=>label.toLowerCase()+' '+fmt(key==='durationSec'?Number(r[key])/60:Number(r[key]))+(unit?' '+unit:'')).concat(r.note?[r.note]:[]).join(' · ')||'Без параметров'}
+function toast(s){clearTimeout(toastTimer);$('#toast').textContent=s;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,5000)}
+function storageError(e){console.error(e);$('#save-state').textContent='Не сохранено';$('#storage-error').textContent='Ошибка хранения. Экспортируй JSON, не закрывая страницу. '+(e.message||'');$('#storage-error').hidden=false}
+function storageOK(){$('#storage-error').hidden=true;$('#save-state').textContent='Черновик сохранён'}
+function enqueue(fn){const task=queue.then(fn);queue=task.catch(()=>{});return task}
+function saveDraft(){if(!ready)return;$('#save-state').textContent='Сохраняю…';const snapshot=clone(draft);enqueue(()=>db.draft(snapshot)).then(storageOK).catch(storageError)}
+function saveCatalog(){const snapshot=clone(catalog);enqueue(()=>db.catalog(snapshot)).catch(storageError)}
+function plural(n,words){return words[n%10===1&&n%100!==11?0:n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?1:2]}
+function updateTotal(){const n=count(draft);$('#exercise-total').textContent=n+' '+plural(n,['упражнение','упражнения','упражнений']);$('#finish').disabled=!ready||busy||!n;$('#clear-draft').disabled=!ready||busy||empty(draft)}
+function setBusy(v){busy=v;document.querySelectorAll('#today-view input,#today-view textarea,#today-view button,#import-file,#confirm-import').forEach(e=>e.disabled=v||!ready);updateTotal()}
+function definition(id,name){let d=catalog.find(x=>x.id===id);if(!d){d={id,name,sectionId:null,fields:Hybrid.presets[id]||['weightKg','reps'],distanceUnit:'m',volumeEnabled:false};catalog.push(d);saveCatalog()}return d}
+function visible(d){return d.fields.filter(k=>keys.includes(k))}
+function makeRecord(source){const r={id:uid(),note:source?.note||''};keys.forEach(k=>{if(source?.[k]!==undefined&&source[k]!=='')r[k]=source[k]});return r}
+function renderToday(){
+ $('#workout-date').value=draft.date;$('#workout-note').value=draft.note;const root=$('#sections');root.replaceChildren();
+ sections.forEach((section,i)=>{const data=draft.sections[i],card=el('section','','section-card');card.dataset.section=section.id;const head=el('div','','section-head'),title=el('div','','section-text');title.append(el('h2',section.title),el('p',section.subtitle));head.append(el('span',section.number,'section-number'),title,el('span',section.icon,'section-symbol'),btn('+ Добавить',()=>openPicker(section),'add-button'));card.append(head);if(!data.exercises.length)card.append(el('div','Добавь упражнение в эту секцию','empty-section'));data.exercises.forEach((e,j)=>card.append(renderExercise(e,data,j)));root.append(card)});
+ updateTotal()
+}
+function move(section,i,delta){const j=i+delta;if(j<0||j>=section.exercises.length)return;[section.exercises[i],section.exercises[j]]=[section.exercises[j],section.exercises[i]];saveDraft();renderToday()}
+function addRecord(exercise,source){if(exercise.records.length>=500){toast('Максимум 500 записей.');return}exercise.records.push(makeRecord(source));saveDraft();renderToday()}
+function renderExercise(exercise,section,index){
+ const card=el('article','','exercise');card.dataset.item=exercise.id;const def=definition(exercise.exerciseId,exercise.name);
+ const head=el('div','','exercise-title'),controls=el('div','','exercise-controls');head.append(el('h3',exercise.name));
+ const up=btn('↑',()=>move(section,index,-1),'icon-button','Поднять '+exercise.name),down=btn('↓',()=>move(section,index,1),'icon-button','Опустить '+exercise.name);up.disabled=index===0;down.disabled=index===section.exercises.length-1;
+ controls.append(up,down,btn('×',()=>{if((exercise.records.some(model.filled)||exercise.note)&&!confirm('Убрать «'+exercise.name+'»?'))return;section.exercises.splice(index,1);saveDraft();renderToday()},'icon-button','Убрать '+exercise.name));head.append(controls);card.append(head);
+ const last=latest(exercise.exerciseId);card.append(el('p',last?'Последний раз '+dateLabel(last.workout.date)+': '+(last.exercise.records.map(result).join(' / ')||last.exercise.note||'без параметров'):'Пока нет результатов','last-result'));
+ const options=el('details','','field-options');options.append(el('summary','Поля записи'));const toggles=el('div','','field-toggles');
+ fields.forEach(([key,label])=>{const wrap=el('label','','field-toggle'),input=document.createElement('input');input.type='checkbox';input.checked=visible(def).includes(key);input.onchange=()=>{def.fields=input.checked?[...new Set([...visible(def),key])]:visible(def).filter(x=>x!==key);saveCatalog();renderToday()};wrap.append(input,document.createTextNode(label));toggles.append(wrap)});options.append(toggles);card.append(options);
+ if(visible(def).includes('distanceM')){const wrap=el('label','Единица дистанции ','unit-label'),select=document.createElement('select');[['m','метры'],['km','километры']].forEach(([v,t])=>select.add(new Option(t,v)));select.value=def.distanceUnit;select.onchange=()=>{def.distanceUnit=select.value;saveCatalog();renderToday()};wrap.append(select);card.append(wrap)}
+ const rows=el('div','','record-list');exercise.records.forEach((r,j)=>rows.append(renderRecord(exercise,r,j,def)));card.append(rows);
+ const actions=el('div','','record-actions');actions.append(btn('+ Запись',()=>addRecord(exercise),'secondary small'));if(exercise.records.length)actions.append(btn('Дублировать последнюю',()=>addRecord(exercise,exercise.records[exercise.records.length-1])));if(last?.exercise.records.length)actions.append(btn('Взять прошлую запись',()=>addRecord(exercise,last.exercise.records[last.exercise.records.length-1])));card.append(actions);
+ const note=document.createElement('textarea');note.rows=1;note.maxLength=2000;note.className='exercise-note';note.placeholder='Заметка ко всему упражнению';note.value=exercise.note;note.oninput=()=>{exercise.note=note.value;saveDraft()};card.append(note);return card
+}
+function renderRecord(exercise,r,index,def){
+ const row=el('div','','record-row'),head=el('div','','record-head');head.append(el('strong','Запись '+(index+1)),btn('×',()=>{exercise.records.splice(index,1);saveDraft();renderToday()},'icon-button','Удалить запись '+(index+1)));row.append(head);
+ const grid=el('div','','record-fields');visible(def).forEach(key=>{const[,label,unit]=names[key],factor=key==='durationSec'?60:key==='distanceM'&&def.distanceUnit==='km'?1000:1,wrap=el('label',label+(unit?', '+(key==='distanceM'&&def.distanceUnit==='km'?'км':unit):'')),input=document.createElement('input');input.type='number';input.min='0';input.step=key==='reps'||key==='rounds'?'1':'any';input.inputMode=key==='reps'||key==='rounds'?'numeric':'decimal';input.placeholder='—';input.value=r[key]===undefined||r[key]===''?'':String(Number(r[key])/factor);input.oninput=()=>{if(input.value==='')delete r[key];else r[key]=String(Number(input.value)*factor);saveDraft()};wrap.append(input);grid.append(wrap)});row.append(grid);
+ const note=document.createElement('input');note.type='text';note.maxLength=1000;note.placeholder='Заметка к записи';note.value=r.note||'';note.setAttribute('aria-label','Заметка к записи '+(index+1));note.oninput=()=>{r.note=note.value;saveDraft()};row.append(note);return row
+}
+function openPicker(section){pickerSection=section;$('#picker-title').textContent=section.title;$('#exercise-search').value='';$('#custom-name').value='';renderPicker();$('#picker').showModal()}
+function renderPicker(){const root=$('#exercise-options'),q=$('#exercise-search').value.toLocaleLowerCase('ru').trim();root.replaceChildren();const map=new Map([...pickerSection.exercises,...catalog.filter(e=>!e.sectionId||e.sectionId===pickerSection.id).map(e=>[e.id,e.name])]);sorted().forEach(w=>w.sections.find(s=>s.id===pickerSection.id)?.exercises.forEach(e=>map.set(e.exerciseId,e.name)));for(const[id,name]of map)if(name.toLocaleLowerCase('ru').includes(q))root.append(btn(name+'  +',()=>addExercise(id,name),'exercise-option'));if(!root.children.length)root.append(el('p','Ничего не найдено. Можно добавить своё упражнение.','muted'))}
+function addExercise(id,name){if(!ready||busy)return;if(count(draft)>=100){toast('Максимум 100 упражнений.');return}draft.sections.find(s=>s.id===pickerSection.id).exercises.push({id:uid(),exerciseId:id,name,note:'',records:[makeRecord()]});definition(id,name);saveDraft();renderToday();$('#picker').close()}
+function renderHistory(){
+ const summary=$('#history-summary');summary.replaceChildren(el('strong',String(history.length)),el('span','тренировок сохранено'));
+ const root=$('#history-list');root.replaceChildren();
+ if(!history.length){root.append(el('p','Собери и заверши первую тренировку.','muted'));return}
+ sorted().forEach(w=>{
+  const card=el('details','','history-card'),head=el('summary');
+  head.append(el('span',dateLabel(w.date),'history-date'),el('span',count(w)+' упражнений','history-meta'));
+  const body=el('div','','history-content');
+  w.sections.forEach((s,i)=>{
+   if(!s.exercises.length)return;
+   body.append(el('h3',sections[i].number+' / '+sections[i].title,'history-section'));
+   s.exercises.forEach(e=>{
+    const item=el('div','','history-item');item.append(el('strong',e.name));
+    e.records.forEach((r,j)=>item.append(el('p',(j+1)+'. '+result(r))));
+    if(e.note)item.append(el('p',e.note,'muted note-text'));
+    body.append(item);
+   });
   });
-  $('#workout-date').addEventListener('input', () => { draft.date = $('#workout-date').value; saveDraft(); });
-  $('#workout-note').addEventListener('input', () => { draft.note = $('#workout-note').value; saveDraft(); updateTotal(); });
-  $('#finish').addEventListener('click', finish);
-  $('#clear-draft').addEventListener('click', () => {
-    if (busy || !ready || !confirm('Очистить текущий черновик? Завершённые тренировки останутся в истории.')) return;
-    draft = emptyDraft(); saveDraft(); renderToday();
-  });
-  $('#export').addEventListener('click', exportData);
-  $('#import-file').addEventListener('change', previewImport);
-  setBusy(true); renderToday();
-  db.open().then(() => db.read()).then(data => {
-    history = data.history; draft = data.draft || emptyDraft(); ready = true;
-    renderToday(); storageOK(); setBusy(false);
-    if (data.backup) $('#backup-info').textContent = 'Последний экспорт: ' + new Date(data.backup).toLocaleString('ru-RU');
-  }).catch(error => { setBusy(false); storageError(error); });
-  setupWorker();
+  if(w.note)body.append(el('p',w.note,'note-text'));
+  card.append(head,body);root.append(card);
+ });
+}
+function renderStats(){const grid=$('#activity-grid');grid.replaceChildren();const counts=new Map();history.forEach(w=>counts.set(w.date,(counts.get(w.date)||0)+1));const end=new Date(model.today()+'T12:00:00'),start=new Date(end);start.setDate(start.getDate()-364-((start.getDay()+6)%7));for(let day=new Date(start);day<=end;day.setDate(day.getDate()+1)){const key=day.getFullYear()+'-'+String(day.getMonth()+1).padStart(2,'0')+'-'+String(day.getDate()).padStart(2,'0'),cell=el('span','','activity-cell level-'+Math.min(counts.get(key)||0,4));cell.title=key+': '+(counts.get(key)||0);grid.append(cell)}const select=$('#stats-exercise'),selected=select.value,map=new Map();history.forEach(w=>w.sections.forEach(s=>s.exercises.forEach(e=>map.set(e.exerciseId,e.name))));select.replaceChildren(new Option('Выбери упражнение',''));[...map].sort((a,b)=>a[1].localeCompare(b[1],'ru')).forEach(([id,name])=>select.add(new Option(name,id)));select.value=map.has(selected)?selected:'';renderExerciseStats()}
+function renderExerciseStats(){const id=$('#stats-exercise').value,metric=$('#stats-metric'),graph=$('#stats-graph'),list=$('#stats-history');graph.replaceChildren();list.replaceChildren();const entries=sorted().flatMap(w=>matches(w,id).map(e=>({date:w.date,exercise:e,metrics:model.metrics(e)}))),available=new Set(entries.flatMap(e=>Object.keys(e.metrics))),old=metric.value;metric.replaceChildren();Object.entries(metricNames).filter(([k])=>available.has(k)&&(k!=='volume'||catalog.find(e=>e.id===id)?.volumeEnabled)).forEach(([k,name])=>metric.add(new Option(name,k)));metric.value=[...metric.options].some(o=>o.value===old)?old:metric.options[0]?.value||'';$('#volume-option').hidden=!id;$('#volume-toggle').checked=!!catalog.find(e=>e.id===id)?.volumeEnabled;if(!id){list.append(el('p','Выбери упражнение.','muted'));return}const key=metric.value,points=entries.filter(e=>e.metrics[key]!==undefined).reverse();if(points.length){const value=e=>key==='durationSecSum'?e.metrics[key]/60:key==='distanceMSum'?e.metrics[key]/1000:e.metrics[key],max=Math.max(1,...points.map(value)),bars=el('div','','chart-bars');points.forEach(p=>{const bar=el('div','','chart-bar');bar.style.height=Math.max(4,value(p)/max*100)+'%';bar.title=p.date+': '+fmt(value(p));bars.append(bar)});graph.append(bars,el('p',metricNames[key]+' · '+points.length+' тренировок','muted'))}else graph.append(el('p','Для выбранной метрики пока нет данных.','muted'));entries.forEach(e=>{const card=el('div','','stats-entry');card.append(el('strong',dateLabel(e.date)));e.exercise.records.forEach((r,j)=>card.append(el('p',(j+1)+'. '+result(r))));if(e.exercise.note)card.append(el('p',e.exercise.note,'muted'));list.append(card)})}
+function switchView(name){document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!==name+'-view');document.querySelectorAll('[data-view]').forEach(b=>{const active=b.dataset.view===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(name==='history')renderHistory();if(name==='stats')renderStats();window.scrollTo(0,0)}
+function validateDefinition(d){if(!d||typeof d.id!=='string'||!d.id||d.id.length>150||typeof d.name!=='string'||!d.name.trim()||d.name.length>100||!Array.isArray(d.fields)||d.fields.some(k=>!keys.includes(k))||!['m','km'].includes(d.distanceUnit)||typeof d.volumeEnabled!=='boolean')throw Error('Некорректная настройка упражнения.');return{id:d.id,name:d.name,sectionId:d.sectionId||null,fields:[...new Set(d.fields)],distanceUnit:d.distanceUnit,volumeEnabled:d.volumeEnabled}}
+function validateBackup(raw){if(!raw||raw.app!=='hybrid-training'||![1,2].includes(raw.schemaVersion)||!Array.isArray(raw.history)||raw.history.length>10000)throw Error('Нужен JSON-экспорт «Гибрид» версии 1 или 2.');const data={history:raw.history.map(w=>raw.schemaVersion===1?model.legacy(w,true):model.validate(w,true)),draft:raw.draft==null?null:raw.schemaVersion===1?model.legacy(raw.draft):model.validate(raw.draft,false,true),catalog:raw.schemaVersion===2&&Array.isArray(raw.catalog)?raw.catalog.map(validateDefinition):[]},ids=new Set();data.history.forEach(w=>{if(ids.has(w.id))throw Error('Повторяются ID тренировок.');ids.add(w.id)});return data}
+function planImport(backup,current){const byId=new Map(current.history.map(w=>[w.id,w])),added=[];let skipped=0;backup.history.forEach(w=>{const old=byId.get(w.id);if(!old)added.push(w);else if(JSON.stringify(old)===JSON.stringify(w))skipped++;else throw Error('Конфликт: тренировки с одинаковым ID отличаются. Импорт отменён.')});const nextCatalog=[...catalog];backup.catalog.forEach(d=>{if(!nextCatalog.some(e=>e.id===d.id))nextCatalog.push(d)});return{added,skipped,draft:backup.draft&&(!current.draft||empty(current.draft))?backup.draft:null,catalog:nextCatalog}}
+async function finish(){if(!ready||busy||!count(draft))return;const invalid=[...document.querySelectorAll('#today-view input')].find(e=>!e.checkValidity());if(invalid){invalid.reportValidity();return}let workout;try{workout=model.validate({...clone(draft),id:uid(),completedAt:new Date().toISOString()},true)}catch(e){toast(e.message);return}if(!workout.sections.some(s=>s.exercises.some(e=>e.records.length||e.note.trim()))&&!workout.note.trim()){toast('Добавь результат или заметку.');return}setBusy(true);try{await enqueue(()=>db.finish(workout));history.push(workout);draft=model.empty();renderToday();storageOK();switchView('history');toast('Тренировка сохранена.')}catch(e){storageError(e)}finally{setBusy(false)}}
+async function exportData(){if(busy)return;const data={app:'hybrid-training',schemaVersion:2,exportedAt:new Date().toISOString(),history:clone(history),draft:clone(draft),catalog:clone(catalog)};if(legacySnapshot)data.legacySnapshot=legacySnapshot;const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='hybrid-training-'+model.today()+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);$('#backup-info').textContent='Файл подготовлен. Сохрани его в «Файлы» или iCloud Drive.';if(ready)enqueue(()=>db.backup(new Date().toISOString())).catch(storageError)}
+async function previewImport(ev){const file=ev.target.files[0];ev.target.value='';pendingImport=null;const box=$('#import-preview');box.replaceChildren();box.hidden=true;if(!file||!ready||busy)return;try{if(file.size>10*1024*1024)throw Error('Максимальный размер файла — 10 МБ.');const backup=validateBackup(JSON.parse(await file.text()));await queue;const current=await db.read(),plan=planImport(backup,{history:current.history,draft});pendingImport=backup;box.append(el('p','Новых тренировок: '+plan.added.length+'. Уже есть: '+plan.skipped+'. '+(plan.draft?'Черновик восстановится.':'Текущий черновик сохранится.')));const b=btn('Импортировать',applyImport,'primary');b.id='confirm-import';box.append(b);box.hidden=false}catch(e){box.append(el('p',e instanceof SyntaxError?'Не удалось прочитать JSON.':e.message));box.hidden=false}}
+async function applyImport(){if(!pendingImport||busy||!ready)return;setBusy(true);try{const plan=await enqueue(async()=>{const current=await db.read(),plan=planImport(pendingImport,{history:current.history,draft});await db.import(plan.added,plan.draft,plan.catalog);history=[...current.history,...plan.added];catalog=plan.catalog;return plan});if(plan.draft)draft=plan.draft;pendingImport=null;$('#import-preview').hidden=true;renderToday();renderHistory();storageOK();toast('Добавлено тренировок: '+plan.added.length+'.')}catch(e){toast(e.message)}finally{setBusy(false)}}
+function setupWorker(){if(!('serviceWorker'in navigator)){$('#connection').textContent='Офлайн недоступен';return}const state=()=>$('#connection').textContent=!navigator.onLine?(navigator.serviceWorker.controller?'Без сети · офлайн':'Без сети'):(navigator.serviceWorker.controller?'Офлайн готов':'Готовим офлайн…');navigator.serviceWorker.addEventListener('controllerchange',state);window.addEventListener('online',state);window.addEventListener('offline',state);navigator.serviceWorker.register('./service-worker.js').then(reg=>{const show=()=>{if(reg.waiting&&navigator.serviceWorker.controller){waitingWorker=reg.waiting;$('#update-banner').hidden=false}};show();reg.addEventListener('updatefound',()=>reg.installing?.addEventListener('statechange',show));state()}).catch(e=>{console.error(e);$('#connection').textContent='Офлайн недоступен'});$('#update-app').onclick=async()=>{if(!waitingWorker||busy||!ready)return;setBusy(true);try{await enqueue(()=>db.draft(clone(draft)));navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload(),{once:true});waitingWorker.postMessage({type:'SKIP_WAITING'})}catch(e){storageError(e);setBusy(false)}}}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));$('#close-picker').onclick=()=>$('#picker').close();$('#exercise-search').oninput=renderPicker;
+$('#custom-form').onsubmit=ev=>{ev.preventDefault();const name=$('#custom-name').value.trim();if(!name||!pickerSection)return;const normalized=name.toLocaleLowerCase('ru').replace(/\s+/g,' '),match=catalog.find(e=>e.name.toLocaleLowerCase('ru').replace(/\s+/g,' ')===normalized)||pickerSection.exercises.find(([,n])=>n.toLocaleLowerCase('ru')===normalized),id=match?(Array.isArray(match)?match[0]:match.id):'custom:'+uid();if(!match){catalog.push({id,name,sectionId:pickerSection.id,fields:['weightKg','reps'],distanceUnit:'m',volumeEnabled:false});saveCatalog()}addExercise(id,name)};
+$('#workout-date').oninput=()=>{draft.date=$('#workout-date').value;saveDraft()};$('#workout-note').oninput=()=>{draft.note=$('#workout-note').value;saveDraft();updateTotal()};$('#finish').onclick=finish;$('#clear-draft').onclick=()=>{if(!ready||busy||!confirm('Очистить черновик?'))return;draft=model.empty();saveDraft();renderToday()};$('#export').onclick=exportData;$('#import-file').onchange=previewImport;$('#stats-exercise').onchange=renderExerciseStats;$('#stats-metric').onchange=renderExerciseStats;$('#volume-toggle').onchange=()=>{const d=catalog.find(e=>e.id===$('#stats-exercise').value);if(!d)return;d.volumeEnabled=$('#volume-toggle').checked;saveCatalog();renderExerciseStats()};
+setBusy(true);renderToday();db.open().then(async()=>{let data=await db.read();if(data.history.some(w=>w.schemaVersion!==2)||(data.draft&&data.draft.schemaVersion!==2)){const snapshot={migratedAt:new Date().toISOString(),history:data.history,draft:data.draft},migrated=data.history.map(w=>w.schemaVersion===2?w:model.legacy(w,true)),next=data.draft?(data.draft.schemaVersion===2?data.draft:model.legacy(data.draft)):null;await db.migrate(migrated,next,snapshot);data=await db.read();toast('Старая история перенесена.')}history=data.history.map(w=>model.validate(w,true));draft=data.draft?model.validate(data.draft,false,true):model.empty();catalog=Array.isArray(data.catalog)?data.catalog.map(validateDefinition):[];legacySnapshot=data.legacySnapshot;ready=true;renderToday();storageOK();setBusy(false);if(data.backup)$('#backup-info').textContent='Последний экспорт: '+new Date(data.backup).toLocaleString('ru-RU')}).catch(e=>{setBusy(false);storageError(e)});setupWorker();
 })();

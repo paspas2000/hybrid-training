@@ -13,5 +13,15 @@ window.Hybrid = {
     { id: 'endurance', number: '04', title: 'Выносливость', subtitle: 'Дыхание. Ритм. Длинная дистанция.', icon: '≈', exercises: [
       ['run', 'Бег'], ['bike', 'Велосипед'], ['rowing', 'Гребля'], ['swim', 'Плавание'], ['walk', 'Быстрая ходьба'], ['ski', 'Лыжный тренажёр'], ['airbike', 'AirBike'], ['ruck', 'Ходьба с рюкзаком']
     ]}
-  ]
+  ],
+  // Editable starting fields only; every exercise can use every metric.
+  presets: {
+    run: ['durationSec', 'distanceM'], bike: ['durationSec', 'distanceM'], rowing: ['durationSec', 'distanceM'],
+    swim: ['durationSec', 'distanceM'], walk: ['durationSec', 'distanceM'], ski: ['durationSec', 'distanceM'],
+    airbike: ['durationSec', 'distanceM'], ruck: ['durationSec', 'distanceM'],
+    sprint: ['durationSec', 'distanceM'], handstand: ['durationSec'], 'jump-rope': ['durationSec', 'reps'],
+    farmer: ['weightKg', 'distanceM'], sandbag: ['weightKg', 'distanceM'],
+    'sled-push': ['weightKg', 'distanceM'], 'sled-pull': ['weightKg', 'distanceM'],
+    circuit: ['rounds', 'durationSec']
+  }
 };
