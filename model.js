@@ -11,7 +11,7 @@
   const limits = { weightKg: 100000, addedWeightKg: 100000, reps: 100000, durationSec: 86400000, distanceM: 100000000, rounds: 100000 };
   const uid = () => crypto.randomUUID();
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-  const empty = () => ({ schemaVersion: 2, date: today(), note: '', sections: Hybrid.sections.map(s => ({ id: s.id, exercises: [] })), groups: [] });
+  const empty = () => ({ schemaVersion: 2, date: today(), note: '', sections: Hybrid.sections.map(s => ({ id: s.id, exercises: [] })), groups: [], order: [] });
   const str = (value, max, name, required = false) => {
     if (typeof value !== 'string' || value.length > max || (required && !value.trim())) throw new Error(`Некорректное поле «${name}».`);
     return value;
@@ -111,6 +111,12 @@
     for (const group of out.groups || []) {
       if (group.order) group.order = group.order.filter(id => out.sections.some(section => section.exercises.some(exercise => exercise.id === id && exercise.groupId === group.id)));
     }
+    if (value.order !== undefined) {
+      if (!Array.isArray(value.order) || value.order.length > 130 || value.order.some(item => typeof item !== 'string' || item.length > 152 || !/^[eg]:.+$/.test(item)) || new Set(value.order).size !== value.order.length) throw new Error('Некорректный порядок тренировки.');
+      const available = new Set([...(out.groups || []).map(group => 'g:' + group.id), ...out.sections.flatMap(section => section.exercises.filter(exercise => !exercise.groupId).map(exercise => 'e:' + exercise.id))]);
+      out.order = value.order.filter(item => available.has(item));
+      for (const item of available) if (!out.order.includes(item)) out.order.push(item);
+    }
     if (completed) {
       if (!count || typeof value.completedAt !== 'string' || Number.isNaN(Date.parse(value.completedAt))) throw new Error('Некорректная завершённая тренировка.');
       out.id = str(value.id, 150, 'id тренировки', true); out.completedAt = new Date(value.completedAt).toISOString();
@@ -119,7 +125,7 @@
   }
   function legacy(value, completed = false) {
     if (!value || !(validDate(value.date) || (!completed && value.date === '')) || !Array.isArray(value.items)) throw new Error('Некорректная старая тренировка.');
-    const out = empty(); out.date = value.date || today(); out.note = str(value.note ?? '', 2000, 'Заметка');
+    const out = empty(); delete out.order; out.date = value.date || today(); out.note = str(value.note ?? '', 2000, 'Заметка');
     for (const item of value.items) {
       const section = out.sections.find(s => s.id === item.sectionId);
       if (!section) throw new Error('Неизвестная секция старой тренировки.');

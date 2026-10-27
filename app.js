@@ -30,17 +30,29 @@ function visible(d){return d.fields.filter(k=>keys.includes(k))}
 function makeRecord(source){const r={id:uid(),note:source?.note||''};keys.forEach(k=>{if(source?.[k]!==undefined&&source[k]!=='')r[k]=source[k]});for(const key of ['weightBasis','bodyweightMode'])if(source?.[key])r[key]=source[key];return r}
 function renderToday(){
  $('#workout-date').value=draft.date;$('#workout-note').value=draft.note;$('#session-rpe').value=draft.sessionRpe||'';const root=$('#sections');root.replaceChildren();
- sections.forEach((section,i)=>{const data=draft.sections[i],card=el('section','','section-card'),standalone=data.exercises.filter(e=>!e.groupId);card.dataset.section=section.id;const head=el('div','','section-head'),title=el('div','','section-text');title.append(el('h2',section.title),el('p',section.subtitle));head.append(el('span',section.number,'section-number'),title,btn('+ Добавить',()=>openPicker(section),'add-button'));card.append(head);if(!standalone.length)card.append(el('div','Нет отдельных упражнений в этой секции','empty-section'));standalone.forEach(e=>card.append(renderExercise(e,data,data.exercises.indexOf(e))));root.append(card)});
+ sections.forEach(section=>{const card=el('section','','section-card');card.dataset.section=section.id;const head=el('div','','section-head'),title=el('div','','section-text');title.append(el('h2',section.title),el('p',section.subtitle));head.append(el('span',section.number,'section-number'),title,btn('+ Добавить',()=>openPicker(section),'add-button'));card.append(head);root.append(card)});
  renderGroups();
  updateTotal()
 }
 const draftExercises=()=>draft.sections.flatMap((section,index)=>section.exercises.map(exercise=>({exercise,section:sections[index]})));
 function groupMembers(workout,group){const members=workout.sections.flatMap((section,index)=>section.exercises.map((exercise,position)=>({exercise,section,index,position}))).filter(item=>item.exercise.groupId===group.id),order=group.order||[];return members.sort((a,b)=>{const ai=order.indexOf(a.exercise.id),bi=order.indexOf(b.exercise.id);return(ai<0?Infinity:ai)-(bi<0?Infinity:bi)})}
+function flowItems(workout){
+ const items=[...(workout.groups||[]).map(group=>({type:'group',token:'g:'+group.id,group})),...workout.sections.flatMap((section,index)=>section.exercises.map((exercise,position)=>({type:'exercise',token:'e:'+exercise.id,exercise,section,index,position})).filter(item=>!item.exercise.groupId))];
+ const byToken=new Map(items.map(item=>[item.token,item])),ordered=(workout.order||[]).map(token=>byToken.get(token)).filter(Boolean);
+ for(const item of items)if(!ordered.includes(item))ordered.push(item);
+ return ordered;
+}
+function ensureDraftOrder(){draft.order=flowItems(draft).map(item=>item.token)}
+function syncDraftOrder(){ensureDraftOrder();saveDraft();renderToday()}
 function renderGroups(){
  const root=$('#group-list');root.replaceChildren();$('#add-group').disabled=!ready||busy||(draft.groups||[]).length>=30;
- for(const group of draft.groups||[]){
+ const flow=flowItems(draft);if(!flow.length)root.append(el('p','Добавь упражнение из блока ниже или создай комплекс.','flow-empty'));
+ for(const item of flow){
+  if(item.type==='exercise'){root.append(renderExercise(item.exercise,item.section,item.position));continue}
+  const group=item.group;
   const card=el('div','','group-card'),members=groupMembers(draft,group),head=el('div','','group-card-head');
-  head.append(el('strong',group.name),btn('Изменить',()=>openGroup(group),'text-button'),btn('×',()=>removeGroup(group),'icon-button','Удалить комплекс '+group.name));card.append(head);
+  const position=flow.findIndex(entry=>entry.token===item.token),up=btn('↑',()=>moveFlowItem(item.token,-1),'icon-button','Поднять комплекс '+group.name),down=btn('↓',()=>moveFlowItem(item.token,1),'icon-button','Опустить комплекс '+group.name);up.disabled=position===0;down.disabled=position===flow.length-1;
+  head.append(el('strong',group.name),up,down,btn('Изменить',()=>openGroup(group),'text-button'),btn('×',()=>removeGroup(group),'icon-button','Удалить комплекс '+group.name));card.append(head);
   const details=[group.rounds?group.rounds+' '+plural(group.rounds,['круг','круга','кругов']):'',group.restSec!==undefined?'отдых '+fmt(group.restSec)+' сек':''].filter(Boolean);
   if(details.length)card.append(el('p',details.join(' · '),'muted'));if(group.note)card.append(el('p',group.note,'muted note-text'));
   if(!members.length)card.append(el('p','Добавь первое упражнение комплекса.','group-empty'));
@@ -51,40 +63,43 @@ function renderGroups(){
 function openGroup(group=null){
  if(!ready||busy||(!group&&(draft.groups||[]).length>=30))return;
  editingGroupId=group?.id||null;$('#group-title').textContent=group?'Изменить комплекс':'Новый комплекс';$('#group-name').value=group?.name||'';$('#group-rounds').value=group?.rounds??'';$('#group-rest').value=group?.restSec??'';$('#group-note').value=group?.note||'';$('#group-error').hidden=true;$('#group-members-field').hidden=!count(draft);
- const root=$('#group-member-options');root.replaceChildren();draftExercises().forEach(({exercise,section})=>{const label=el('label','','group-member'),input=document.createElement('input');input.type='checkbox';input.value=exercise.id;input.checked=!!group&&exercise.groupId===group.id;label.append(input,document.createTextNode(section.number+' · '+exercise.name));root.append(label)});
+ const root=$('#group-member-options');root.replaceChildren();flowItems(draft).flatMap(item=>item.type==='group'?groupMembers(draft,item.group):[item]).forEach(({exercise,index})=>{const label=el('label','','group-member'),input=document.createElement('input');input.type='checkbox';input.value=exercise.id;input.checked=!!group&&exercise.groupId===group.id;label.append(input,document.createTextNode(sections[index].number+' · '+exercise.name));root.append(label)});
  $('#group-dialog').showModal();
 }
 function removeGroup(group){
  if(!confirm('Удалить связку «'+group.name+'»? Упражнения и записи останутся.'))return;
- draft.groups=draft.groups.filter(item=>item.id!==group.id);draftExercises().forEach(({exercise})=>{if(exercise.groupId===group.id)delete exercise.groupId});saveDraft();renderToday();
+ ensureDraftOrder();const members=groupMembers(draft,group).map(item=>'e:'+item.exercise.id),position=draft.order.indexOf('g:'+group.id);draft.order.splice(position,1,...members);draft.groups=draft.groups.filter(item=>item.id!==group.id);draftExercises().forEach(({exercise})=>{if(exercise.groupId===group.id)delete exercise.groupId});syncDraftOrder();
 }
-function move(section,i,delta){let j=i+delta;while(j>=0&&j<section.exercises.length&&section.exercises[j].groupId)j+=delta;if(j<0||j>=section.exercises.length)return;[section.exercises[i],section.exercises[j]]=[section.exercises[j],section.exercises[i]];saveDraft();renderToday()}
+function moveFlowItem(token,delta){ensureDraftOrder();const i=draft.order.indexOf(token),j=i+delta;if(i<0||j<0||j>=draft.order.length)return;[draft.order[i],draft.order[j]]=[draft.order[j],draft.order[i]];saveDraft();renderToday()}
 function moveGroupMember(group,exercise,delta){const order=groupMembers(draft,group).map(item=>item.exercise.id),i=order.indexOf(exercise.id),j=i+delta;if(j<0||j>=order.length)return;[order[i],order[j]]=[order[j],order[i]];group.order=order;saveDraft();renderToday()}
-function addRecord(exercise,source){if(exercise.records.length>=500){toast('Максимум 500 записей.');return}const record=makeRecord(source);if(definition(exercise.exerciseId,exercise.name).bodyweight&&!record.bodyweightMode)record.bodyweightMode='self';exercise.records.push(record);saveDraft();renderToday()}
+function addRecord(exercise,source){if(exercise.records.length>=500){toast('Максимум 500 записей.');return}const record=makeRecord(source);if(definition(exercise.exerciseId,exercise.name).bodyweight&&!record.bodyweightMode)record.bodyweightMode='self';exercise.records.push(record);saveDraft();renderToday();const input=document.querySelector('[data-record="'+record.id+'"] input[type="number"]');input?.focus()}
 function renderExercise(exercise,section,index,group=null){
  const card=el('article','','exercise');card.dataset.item=exercise.id;const def=definition(exercise.exerciseId,exercise.name);
  const head=el('div','','exercise-title'),controls=el('div','','exercise-controls');head.append(el('h3',exercise.name));
- const peers=group?groupMembers(draft,group).map(item=>item.exercise):section.exercises.filter(item=>!item.groupId),peerIndex=peers.indexOf(exercise);
- const up=btn('↑',()=>group?moveGroupMember(group,exercise,-1):move(section,index,-1),'icon-button','Поднять '+exercise.name),down=btn('↓',()=>group?moveGroupMember(group,exercise,1):move(section,index,1),'icon-button','Опустить '+exercise.name);up.disabled=peerIndex===0;down.disabled=peerIndex===peers.length-1;
- controls.append(up,down,btn('×',()=>{if((exercise.records.some(model.filled)||exercise.note)&&!confirm('Убрать «'+exercise.name+'»?'))return;section.exercises.splice(index,1);if(group?.order)group.order=group.order.filter(id=>id!==exercise.id);saveDraft();renderToday()},'icon-button','Убрать '+exercise.name));head.append(controls);card.append(head);
- if(group)card.append(el('p',sections.find(item=>item.id===section.id)?.title||section.id,'group-tag'));
- const last=latest(exercise.exerciseId,exercise.variant||'');card.append(el('p',last?'Последний раз '+dateLabel(last.workout.date)+': '+(last.exercise.records.map(result).join(' / ')||last.exercise.note||'без параметров'):'Пока нет результатов','last-result'));
- const variantWrap=el('label','Вариант выполнения (необязательно)','variant-label'),variant=document.createElement('input');variant.type='text';variant.maxLength=100;variant.placeholder='Например: с виса, фронтальный, интервальный';variant.value=exercise.variant||'';variant.oninput=()=>{if(variant.value.trim())exercise.variant=variant.value;else delete exercise.variant;saveDraft()};variant.onchange=()=>{const value=variant.value.trim(),known=variantsFor(exercise.exerciseId,def),canonical=known.find(item=>item.toLocaleLowerCase('ru')===value.toLocaleLowerCase('ru'));if(value){exercise.variant=canonical||value;def.variants??=[];if(!canonical&&def.variants.length<50){def.variants.push(value);saveCatalog()}}else delete exercise.variant;saveDraft();renderToday()};variantWrap.append(variant);card.append(variantWrap);
- const suggestions=variantsFor(exercise.exerciseId,def).slice(0,5);if(suggestions.length){const chips=el('div','','variant-suggestions');suggestions.forEach(value=>chips.append(btn(value,()=>{exercise.variant=value;saveDraft();renderToday()},'variant-chip')));card.append(chips)}
+ const peers=group?groupMembers(draft,group).map(item=>item.exercise):flowItems(draft).map(item=>item.type==='exercise'?item.exercise:item.group),peerIndex=peers.indexOf(exercise);
+ const up=btn('↑',()=>group?moveGroupMember(group,exercise,-1):moveFlowItem('e:'+exercise.id,-1),'icon-button','Поднять '+exercise.name),down=btn('↓',()=>group?moveGroupMember(group,exercise,1):moveFlowItem('e:'+exercise.id,1),'icon-button','Опустить '+exercise.name);up.disabled=peerIndex===0;down.disabled=peerIndex===peers.length-1;
+ controls.append(up,down,btn('×',()=>{if((exercise.records.some(model.filled)||exercise.note)&&!confirm('Убрать «'+exercise.name+'»?'))return;section.exercises.splice(index,1);if(group?.order)group.order=group.order.filter(id=>id!==exercise.id);syncDraftOrder()},'icon-button','Убрать '+exercise.name));head.append(controls);card.append(head);
+ card.append(el('p',(sections.find(item=>item.id===section.id)?.title||section.id)+(exercise.variant?' · '+exercise.variant:''),'group-tag'));
+ const last=latest(exercise.exerciseId,exercise.variant||''),lastRecord=last?.exercise.records[last.exercise.records.length-1];card.append(el('p',last?'Последний раз '+dateLabel(last.workout.date)+': '+(lastRecord?result(lastRecord)+(last.exercise.records.length>1?' · '+last.exercise.records.length+' '+plural(last.exercise.records.length,['запись','записи','записей']):''):last.exercise.note||'без параметров'):'Пока нет результатов','last-result'));
+ const settings=el('details','','exercise-settings');settings.append(el('summary','Вариант и поля упражнения'));card.append(settings);
+ const variantWrap=el('label','Вариант выполнения (необязательно)','variant-label'),variant=document.createElement('input');variant.type='text';variant.maxLength=100;variant.placeholder='Например: с виса, фронтальный, интервальный';variant.value=exercise.variant||'';variant.oninput=()=>{if(variant.value.trim())exercise.variant=variant.value;else delete exercise.variant;saveDraft()};variant.onchange=()=>{const value=variant.value.trim(),known=variantsFor(exercise.exerciseId,def),canonical=known.find(item=>item.toLocaleLowerCase('ru')===value.toLocaleLowerCase('ru'));if(value){exercise.variant=canonical||value;def.variants??=[];if(!canonical&&def.variants.length<50){def.variants.push(value);saveCatalog()}}else delete exercise.variant;saveDraft();renderToday()};variantWrap.append(variant);settings.append(variantWrap);
+ const suggestions=variantsFor(exercise.exerciseId,def).slice(0,5);if(suggestions.length){const chips=el('div','','variant-suggestions');suggestions.forEach(value=>chips.append(btn(value,()=>{exercise.variant=value;saveDraft();renderToday()},'variant-chip')));settings.append(chips)}
  const options=el('details','','field-options');options.append(el('summary','Поля записи'));const toggles=el('div','','field-toggles');
- fields.forEach(([key,label])=>{const wrap=el('label','','field-toggle'),input=document.createElement('input');input.type='checkbox';input.checked=visible(def).includes(key);input.onchange=()=>{def.fields=input.checked?[...new Set([...visible(def),key])]:visible(def).filter(x=>x!==key);saveCatalog();renderToday()};wrap.append(input,document.createTextNode(label));toggles.append(wrap)});options.append(toggles);card.append(options);
+ fields.forEach(([key,label])=>{const wrap=el('label','','field-toggle'),input=document.createElement('input');input.type='checkbox';input.checked=visible(def).includes(key);input.onchange=()=>{def.fields=input.checked?[...new Set([...visible(def),key])]:visible(def).filter(x=>x!==key);saveCatalog();renderToday()};wrap.append(input,document.createTextNode(label));toggles.append(wrap)});options.append(toggles);settings.append(options);
  const bodyweightToggle=el('label','','field-toggle'),bodyweightInput=document.createElement('input');bodyweightInput.type='checkbox';bodyweightInput.checked=!!def.bodyweight;bodyweightInput.onchange=()=>{def.bodyweight=bodyweightInput.checked;saveCatalog();renderToday()};bodyweightToggle.append(bodyweightInput,document.createTextNode('Работа с собственным весом'));toggles.append(bodyweightToggle);
- if(visible(def).includes('distanceM')){const wrap=el('label','Единица дистанции ','unit-label'),select=document.createElement('select');[['m','метры'],['km','километры']].forEach(([v,t])=>select.add(new Option(t,v)));select.value=def.distanceUnit;select.onchange=()=>{def.distanceUnit=select.value;saveCatalog();renderToday()};wrap.append(select);card.append(wrap)}
+ if(visible(def).includes('distanceM')){const wrap=el('label','Единица дистанции ','unit-label'),select=document.createElement('select');[['m','метры'],['km','километры']].forEach(([v,t])=>select.add(new Option(t,v)));select.value=def.distanceUnit;select.onchange=()=>{def.distanceUnit=select.value;saveCatalog();renderToday()};wrap.append(select);settings.append(wrap)}
  const rows=el('div','','record-list');exercise.records.forEach((r,j)=>rows.append(renderRecord(exercise,r,j,def)));card.append(rows);
- const actions=el('div','','record-actions');actions.append(btn('+ Запись',()=>addRecord(exercise),'secondary small'));if(exercise.records.length)actions.append(btn('Дублировать последнюю',()=>addRecord(exercise,exercise.records[exercise.records.length-1])));if(last?.exercise.records.length)actions.append(btn('Взять прошлую запись',()=>addRecord(exercise,last.exercise.records[last.exercise.records.length-1])));card.append(actions);
+ const actions=el('div','','record-actions');actions.append(btn('+ Следующая запись',()=>addRecord(exercise,exercise.records.length?{...exercise.records[exercise.records.length-1],note:''}:null),'secondary small'));actions.append(btn('Пустая запись',()=>addRecord(exercise)));if(last?.exercise.records.length)actions.append(btn('Взять прошлую запись',()=>addRecord(exercise,last.exercise.records[last.exercise.records.length-1])));card.append(actions);
  const note=document.createElement('textarea');note.rows=1;note.maxLength=2000;note.className='exercise-note';note.placeholder='Заметка ко всему упражнению';note.value=exercise.note;note.oninput=()=>{exercise.note=note.value;saveDraft()};card.append(note);return card
 }
 function renderRecord(exercise,r,index,def){
- const row=el('div','','record-row'),head=el('div','','record-head');head.append(el('strong','Запись '+(index+1)),btn('×',()=>{exercise.records.splice(index,1);saveDraft();renderToday()},'icon-button','Удалить запись '+(index+1)));row.append(head);
- const grid=el('div','','record-fields');visible(def).forEach(key=>{const[,label,unit]=names[key],factor=key==='durationSec'?60:key==='distanceM'&&def.distanceUnit==='km'?1000:1,caption=key==='addedWeightKg'?'Доп. вес, кг (если есть)':label+(unit?', '+(key==='distanceM'&&def.distanceUnit==='km'?'км':unit):''),wrap=el('label',caption),input=document.createElement('input');input.type='number';input.min='0';input.step=key==='reps'||key==='rounds'?'1':'any';input.inputMode=key==='reps'||key==='rounds'?'numeric':'decimal';input.placeholder='—';input.value=r[key]===undefined||r[key]===''?'':String(Number(r[key])/factor);input.oninput=()=>{if(input.value==='')delete r[key];else r[key]=String(Number(input.value)*factor);if(key==='addedWeightKg'&&def.bodyweight){r.bodyweightMode=input.value&&Number(input.value)>0?'weighted':'self';const mode=row.querySelector('.bodyweight-mode');if(mode)mode.value=r.bodyweightMode}saveDraft()};wrap.append(input);grid.append(wrap)});row.append(grid);
- if(visible(def).includes('weightKg')){const wrap=el('label','Как указан вес','record-context'),select=document.createElement('select');[['','Не уточнять'],['total','Общий вес'],['perHand','На одну руку'],['perImplement','На один снаряд']].forEach(([value,label])=>select.add(new Option(label,value)));select.value=r.weightBasis||'';select.onchange=()=>{if(select.value)r.weightBasis=select.value;else delete r.weightBasis;saveDraft()};wrap.append(select);row.append(wrap)}
- if(def.bodyweight){const wrap=el('label','Нагрузка собственным весом','record-context'),select=document.createElement('select');select.className='bodyweight-mode';[['self','Свой вес'],['weighted','С дополнительным весом'],['assisted','С помощью / резиной']].forEach(([value,label])=>select.add(new Option(label,value)));select.value=r.bodyweightMode||(Number(r.addedWeightKg)>0?'weighted':'self');select.onchange=()=>{r.bodyweightMode=select.value;if(select.value!=='weighted')delete r.addedWeightKg;saveDraft();renderToday()};wrap.append(select);row.append(wrap)}
- const note=document.createElement('input');note.type='text';note.maxLength=1000;note.placeholder='Заметка к записи';note.value=r.note||'';note.setAttribute('aria-label','Заметка к записи '+(index+1));note.oninput=()=>{r.note=note.value;saveDraft()};row.append(note);return row
+ const row=el('div','','record-row compact-record');row.dataset.record=r.id;const shown=visible(def),main=el('div','','record-main');main.append(el('strong',String(index+1),'record-number'));
+ function field(key){const[,label,unit]=names[key],factor=key==='durationSec'?60:key==='distanceM'&&def.distanceUnit==='km'?1000:1,caption=key==='addedWeightKg'?'Доп. вес, кг':label+(unit?', '+(key==='distanceM'&&def.distanceUnit==='km'?'км':unit):''),wrap=el('label',caption),input=document.createElement('input');input.type='number';input.min='0';input.step=key==='reps'||key==='rounds'?'1':'any';input.inputMode=key==='reps'||key==='rounds'?'numeric':'decimal';input.placeholder='—';input.value=r[key]===undefined||r[key]===''?'':String(Number(r[key])/factor);input.oninput=()=>{if(input.value==='')delete r[key];else r[key]=String(Number(input.value)*factor);if(key==='addedWeightKg'&&def.bodyweight){r.bodyweightMode=input.value&&Number(input.value)>0?'weighted':'self';const mode=row.querySelector('.bodyweight-mode');if(mode)mode.value=r.bodyweightMode}saveDraft()};wrap.append(input);return wrap}
+ shown.slice(0,2).forEach(key=>main.append(field(key)));main.append(btn('×',()=>{exercise.records.splice(index,1);saveDraft();renderToday()},'icon-button','Удалить запись '+(index+1)));row.append(main);
+ const extra=el('details','','record-extra');extra.open=!!r.note||shown.slice(2).some(key=>r[key]!==undefined)||!!r.weightBasis||(def.bodyweight&&r.bodyweightMode&&r.bodyweightMode!=='self');extra.append(el('summary','Ещё параметры / заметка'));const grid=el('div','','record-fields');shown.slice(2).forEach(key=>grid.append(field(key)));if(grid.children.length)extra.append(grid);
+ if(shown.includes('weightKg')){const wrap=el('label','Как указан вес','record-context'),select=document.createElement('select');[['','Не уточнять'],['total','Общий вес'],['perHand','На одну руку'],['perImplement','На один снаряд']].forEach(([value,label])=>select.add(new Option(label,value)));select.value=r.weightBasis||'';select.onchange=()=>{if(select.value)r.weightBasis=select.value;else delete r.weightBasis;saveDraft()};wrap.append(select);extra.append(wrap)}
+ if(def.bodyweight){const wrap=el('label','Нагрузка собственным весом','record-context'),select=document.createElement('select');select.className='bodyweight-mode';[['self','Свой вес'],['weighted','С дополнительным весом'],['assisted','С помощью / резиной']].forEach(([value,label])=>select.add(new Option(label,value)));select.value=r.bodyweightMode||(Number(r.addedWeightKg)>0?'weighted':'self');select.onchange=()=>{r.bodyweightMode=select.value;if(select.value!=='weighted')delete r.addedWeightKg;saveDraft();renderToday()};wrap.append(select);extra.append(wrap)}
+ const note=document.createElement('input');note.type='text';note.maxLength=1000;note.placeholder='Заметка к записи';note.value=r.note||'';note.setAttribute('aria-label','Заметка к записи '+(index+1));note.oninput=()=>{r.note=note.value;saveDraft()};extra.append(note);row.append(extra);return row
 }
 function openPicker(section,groupId=null){pickerSection=section;pickerGroupId=groupId;$('#picker-title').textContent=groupId?(draft.groups||[]).find(item=>item.id===groupId)?.name||'Комплекс':section.title;$('#picker-section-label').hidden=!groupId;$('#picker-section').value=section.id;$('#exercise-search').value='';$('#equipment-filter').value='all';$('#custom-name').value='';$('#custom-equipment').value='';renderPicker();$('#picker').showModal()}
 function renderPicker(){
@@ -97,7 +112,7 @@ function renderPicker(){
  appendGroup('ИЗБРАННОЕ',entries.filter(item=>item.favorite));appendGroup('НЕДАВНИЕ',entries.filter(item=>!item.favorite&&recent.has(item.id)).sort((a,b)=>recent.get(a.id)-recent.get(b.id)));appendGroup('ВСЕ УПРАЖНЕНИЯ',entries.filter(item=>!item.favorite&&!recent.has(item.id)));
  if(!entries.length)root.append(el('p','Ничего не найдено. Можно добавить своё упражнение.','muted'));
 }
-function addExercise(id,name){if(!ready||busy)return;if(count(draft)>=100){toast('Максимум 100 упражнений.');return}const def=definition(id,name),record=makeRecord();if(def.bodyweight)record.bodyweightMode='self';const exercise={id:uid(),exerciseId:id,name,note:'',records:[record]};if(pickerGroupId){const group=(draft.groups||[]).find(item=>item.id===pickerGroupId);if(!group)return;exercise.groupId=group.id;group.order??=groupMembers(draft,group).map(item=>item.exercise.id);group.order.push(exercise.id)}draft.sections.find(s=>s.id===pickerSection.id).exercises.push(exercise);saveDraft();renderToday();$('#picker').close()}
+function addExercise(id,name){if(!ready||busy)return;if(count(draft)>=100){toast('Максимум 100 упражнений.');return}ensureDraftOrder();const def=definition(id,name),record=makeRecord();if(def.bodyweight)record.bodyweightMode='self';const exercise={id:uid(),exerciseId:id,name,note:'',records:[record]};if(pickerGroupId){const group=(draft.groups||[]).find(item=>item.id===pickerGroupId);if(!group)return;exercise.groupId=group.id;group.order??=groupMembers(draft,group).map(item=>item.exercise.id);group.order.push(exercise.id)}else draft.order.push('e:'+exercise.id);draft.sections.find(s=>s.id===pickerSection.id).exercises.push(exercise);saveDraft();renderToday();$('#picker').close()}
 function renderHistory(){
  const summary=$('#history-summary'),n=history.length;summary.replaceChildren(el('strong',String(n)),el('span',plural(n,['тренировка сохранена','тренировки сохранены','тренировок сохранено'])));
  const root=$('#history-list');root.replaceChildren();
@@ -107,24 +122,30 @@ function renderHistory(){
   const exercises=count(w);head.append(el('span',dateLabel(w.date),'history-date'),el('span',exercises+' '+plural(exercises,['упражнение','упражнения','упражнений']),'history-meta'));
   const body=el('div','','history-content');
   if(w.sessionRpe)body.append(el('p','Сложность: '+w.sessionRpe+'/10','effort-summary'));
-  for(const group of w.groups||[]){const members=groupMembers(w,group);if(!members.length)continue;const grouped=el('section','','history-group');grouped.append(el('h3','Комплекс «'+group.name+'»'+(group.rounds?' · '+group.rounds+' '+plural(group.rounds,['круг','круга','кругов']):'')+(group.restSec!==undefined?' · отдых '+fmt(group.restSec)+' сек':'')));if(group.note)grouped.append(el('p',group.note,'muted note-text'));members.forEach(({exercise,index})=>{const item=el('div','','history-item');item.append(el('strong',exercise.name+(exercise.variant?' · '+exercise.variant:'')+' · '+sections[index].title));exercise.records.forEach((record,j)=>item.append(el('p',(j+1)+'. '+result(record))));if(exercise.note)item.append(el('p',exercise.note,'muted note-text'));grouped.append(item)});body.append(grouped)}
-  w.sections.forEach((s,i)=>{
-   const standalone=s.exercises.filter(exercise=>!exercise.groupId);if(!standalone.length)return;
-   body.append(el('h3',sections[i].number+' / '+sections[i].title,'history-section'));
-   standalone.forEach(e=>{
-    const item=el('div','','history-item');item.append(el('strong',e.name+(e.variant?' · '+e.variant:'')));
-    e.records.forEach((r,j)=>item.append(el('p',(j+1)+'. '+result(r))));
-    if(e.note)item.append(el('p',e.note,'muted note-text'));
-    body.append(item);
-   });
-  });
+  for(const flow of flowItems(w)){
+   if(flow.type==='group'){const group=flow.group,members=groupMembers(w,group);if(!members.length)continue;const grouped=el('section','','history-group');grouped.append(el('h3','Комплекс «'+group.name+'»'+(group.rounds?' · '+group.rounds+' '+plural(group.rounds,['круг','круга','кругов']):'')+(group.restSec!==undefined?' · отдых '+fmt(group.restSec)+' сек':'')));if(group.note)grouped.append(el('p',group.note,'muted note-text'));members.forEach(({exercise,index})=>{const item=el('div','','history-item');item.append(el('strong',exercise.name+(exercise.variant?' · '+exercise.variant:'')+' · '+sections[index].title));exercise.records.forEach((record,j)=>item.append(el('p',(j+1)+'. '+result(record))));if(exercise.note)item.append(el('p',exercise.note,'muted note-text'));grouped.append(item)});body.append(grouped);continue}
+   const e=flow.exercise,item=el('div','','history-item');item.append(el('strong',e.name+(e.variant?' · '+e.variant:'')+' · '+sections[flow.index].title));e.records.forEach((r,j)=>item.append(el('p',(j+1)+'. '+result(r))));if(e.note)item.append(el('p',e.note,'muted note-text'));body.append(item);
+  }
   if(w.note)body.append(el('p',w.note,'note-text'));
   const actions=el('div','','history-actions');
   actions.append(btn('Разбор тренировки',()=>{switchView('stats');$('#stats-workout').value=w.id;renderWorkoutStats()},'secondary'));
+  actions.append(btn('Повторить тренировку',()=>repeatWorkout(w),'secondary'));
   actions.append(btn('Удалить тренировку',()=>deleteWorkout(w),'text-button danger','Удалить тренировку за '+dateLabel(w.date)));
   body.append(actions);
   card.append(head,body);root.append(card);
  });
+}
+async function repeatWorkout(workout){
+ if(!ready||busy)return;
+ if(!empty(draft)&&!confirm('Заменить текущий черновик копией тренировки за '+dateLabel(workout.date)+'? Сначала экспортируй JSON, если хочешь сохранить черновик.'))return;
+ const copy=clone(workout),groupIds=new Map(),exerciseIds=new Map();
+ for(const group of copy.groups||[]){const old=group.id;group.id=uid();groupIds.set(old,group.id)}
+ for(const section of copy.sections)for(const exercise of section.exercises){const old=exercise.id;exercise.id=uid();exerciseIds.set(old,exercise.id);if(exercise.groupId)exercise.groupId=groupIds.get(exercise.groupId);exercise.records.forEach(record=>record.id=uid())}
+ for(const group of copy.groups||[])if(group.order)group.order=group.order.map(id=>exerciseIds.get(id)).filter(Boolean);
+ copy.order=flowItems(workout).map(item=>item.type==='group'?'g:'+groupIds.get(item.group.id):'e:'+exerciseIds.get(item.exercise.id));
+ copy.date=model.today();copy.note='';delete copy.id;delete copy.completedAt;delete copy.sessionRpe;
+ let next;try{next=model.validate(copy,false,true)}catch(error){toast(error.message);return}
+ setBusy(true);try{await enqueue(()=>db.draft(next));draft=next;renderToday();switchView('today');storageOK();toast('Тренировка скопирована в черновик.')}catch(error){storageError(error);toast('Не удалось повторить тренировку.')}finally{setBusy(false)}
 }
 async function deleteWorkout(workout){
  if(!ready||busy||!confirm('Удалить тренировку за '+dateLabel(workout.date)+'? Это удалит её из истории и статистики. Вернуть можно только из ранее сохранённого JSON.'))return;
@@ -155,11 +176,11 @@ function renderWorkoutStats(){
  if(!workout){root.append(el('p','Выбери тренировку для разбора.','muted'));return}
  const totalRecords=workout.sections.reduce((n,s)=>n+s.exercises.reduce((m,e)=>m+e.records.length,0),0);
  root.append(el('p',count(workout)+' '+plural(count(workout),['упражнение','упражнения','упражнений'])+' · '+totalRecords+' '+plural(totalRecords,['запись','записи','записей'])+(workout.sessionRpe?' · сложность '+workout.sessionRpe+'/10':''),'muted'));
- for(const group of workout.groups||[]){const members=groupMembers(workout,group).map(item=>item.exercise);if(members.length)root.append(el('p','Комплекс «'+group.name+'»: '+members.map(exercise=>exercise.name).join(' → ')+(group.rounds?' · '+group.rounds+' '+plural(group.rounds,['круг','круга','кругов']):'')+(group.restSec!==undefined?' · отдых '+fmt(group.restSec)+' сек':''),'group-history'))}
- workout.sections.forEach((section,i)=>{
-  if(!section.exercises.length)return;
-  root.append(el('h3',sections[i].title,'workout-section-title'));
-  section.exercises.forEach(exercise=>{
+ const ordered=[];for(const item of flowItems(workout)){if(item.type==='group'){ordered.push(item,...groupMembers(workout,item.group))}else ordered.push(item)}
+ ordered.forEach(item=>{
+  if(item.type==='group'){const group=item.group,members=groupMembers(workout,group);if(members.length)root.append(el('p','Комплекс «'+group.name+'»: '+members.map(entry=>entry.exercise.name).join(' → ')+(group.rounds?' · '+group.rounds+' '+plural(group.rounds,['круг','круга','кругов']):'')+(group.restSec!==undefined?' · отдых '+fmt(group.restSec)+' сек':''),'group-history'));return}
+  const {exercise,index}=item;
+  root.append(el('h3',sections[index].title,'workout-section-title'));
    const card=el('section','','workout-exercise'),heading=el('h4',exercise.name+(exercise.variant?' · '+exercise.variant:''));
    card.append(heading);
    const summary=model.metrics(exercise),chips=el('div','','metric-chips');
@@ -182,7 +203,6 @@ function renderWorkoutStats(){
    if(bases.size>1)card.append(el('p','Вес указан разными способами; максимум и график веса здесь не объединяются. Выбери способ в статистике упражнения.','muted'));
    if(exercise.note)card.append(el('p',exercise.note,'muted note-text'));
    root.append(card);
-  });
  });
  if(workout.note)root.append(el('p',workout.note,'note-text'));
 }
@@ -271,7 +291,21 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.d
 Hybrid.equipmentLabels.forEach(([key,label])=>$('#equipment-filter').add(new Option(label,key)));$('#custom-equipment').add(new Option('Не указывать',''));Hybrid.equipmentLabels.filter(([key])=>key!=='all').forEach(([key,label])=>$('#custom-equipment').add(new Option(label,key)));$('#equipment-filter').onchange=renderPicker;
 sections.forEach(section=>$('#picker-section').add(new Option(section.title,section.id)));$('#picker-section').onchange=()=>{pickerSection=sections.find(section=>section.id===$('#picker-section').value);$('#exercise-search').value='';renderPicker()};
 $('#add-group').onclick=()=>openGroup();$('#close-group').onclick=()=>$('#group-dialog').close();
-$('#group-form').onsubmit=event=>{event.preventDefault();if(!ready||busy)return;const selected=new Set([...document.querySelectorAll('#group-member-options input:checked')].map(input=>input.value));const id=editingGroupId||uid(),previous=(draft.groups||[]).find(item=>item.id===id),group={id,name:$('#group-name').value.trim(),note:$('#group-note').value.trim()};if($('#group-rounds').value!=='')group.rounds=Number($('#group-rounds').value);if($('#group-rest').value!=='')group.restSec=Number($('#group-rest').value);const prior=previous?groupMembers(draft,previous).map(item=>item.exercise.id):[],order=prior.filter(item=>selected.has(item));for(const item of draftExercises())if(selected.has(item.exercise.id)&&!order.includes(item.exercise.id))order.push(item.exercise.id);group.order=order;draft.groups??=[];const position=draft.groups.findIndex(item=>item.id===id);if(position<0)draft.groups.push(group);else draft.groups[position]=group;draftExercises().forEach(({exercise})=>{if(selected.has(exercise.id))exercise.groupId=id;else if(exercise.groupId===id)delete exercise.groupId});saveDraft();$('#group-dialog').close();renderToday()};
+$('#group-form').onsubmit=event=>{
+ event.preventDefault();if(!ready||busy)return;ensureDraftOrder();
+ const selected=new Set([...document.querySelectorAll('#group-member-options input:checked')].map(input=>input.value)),id=editingGroupId||uid(),previous=(draft.groups||[]).find(item=>item.id===id);
+ const group={id,name:$('#group-name').value.trim(),note:$('#group-note').value.trim()};
+ if($('#group-rounds').value!=='')group.rounds=Number($('#group-rounds').value);
+ if($('#group-rest').value!=='')group.restSec=Number($('#group-rest').value);
+ const prior=previous?groupMembers(draft,previous).map(item=>item.exercise.id):[],order=prior.filter(item=>selected.has(item)),released=prior.filter(item=>!selected.has(item));
+ for(const item of flowItems(draft).flatMap(entry=>entry.type==='group'?groupMembers(draft,entry.group):[entry]))if(selected.has(item.exercise.id)&&!order.includes(item.exercise.id))order.push(item.exercise.id);
+ group.order=order;
+ const selectedPositions=[...selected].map(item=>draft.order.indexOf('e:'+item)).filter(item=>item>=0),insertAt=selectedPositions.length?Math.min(...selectedPositions):draft.order.length;
+ draft.groups??=[];const position=draft.groups.findIndex(item=>item.id===id);if(position<0){draft.groups.push(group);draft.order.splice(insertAt,0,'g:'+id)}else draft.groups[position]=group;
+ draftExercises().forEach(({exercise})=>{if(selected.has(exercise.id))exercise.groupId=id;else if(exercise.groupId===id)delete exercise.groupId});
+ const groupPosition=draft.order.indexOf('g:'+id);draft.order.splice(groupPosition+1,0,...released.map(item=>'e:'+item));
+ syncDraftOrder();$('#group-dialog').close();
+};
 $('#custom-form').onsubmit=ev=>{ev.preventDefault();const name=$('#custom-name').value.trim();if(!name||!pickerSection)return;const normalized=name.toLocaleLowerCase('ru').replace(/\s+/g,' '),match=pickerSection.exercises.find(([,n])=>n.toLocaleLowerCase('ru')===normalized)||catalog.find(e=>e.id.startsWith('custom:')&&(!e.sectionId||e.sectionId===pickerSection.id)&&e.name.toLocaleLowerCase('ru').replace(/\s+/g,' ')===normalized),id=match?(Array.isArray(match)?match[0]:match.id):'custom:'+uid();if(!match){catalog.push({id,name,sectionId:pickerSection.id,fields:['weightKg','reps'],distanceUnit:'m',volumeEnabled:false,bodyweight:false,equipment:$('#custom-equipment').value,favorite:false,variants:[]});saveCatalog()}addExercise(id,name)};
 $('#workout-date').oninput=()=>{draft.date=$('#workout-date').value;saveDraft()};$('#workout-note').oninput=()=>{draft.note=$('#workout-note').value;saveDraft();updateTotal()};$('#session-rpe').onchange=()=>{if($('#session-rpe').value)draft.sessionRpe=Number($('#session-rpe').value);else delete draft.sessionRpe;saveDraft()};$('#finish').onclick=finish;$('#clear-draft').onclick=()=>{if(!ready||busy||!confirm('Очистить черновик?'))return;draft=model.empty();saveDraft();renderToday()};$('#export').onclick=exportData;$('#import-file').onchange=previewImport;$('#stats-workout').onchange=renderWorkoutStats;$('#stats-exercise').onchange=()=>{renderVariantOptions();renderBasisOptions();renderExerciseStats()};$('#stats-variant').onchange=()=>{renderBasisOptions();renderExerciseStats()};$('#stats-basis').onchange=renderExerciseStats;$('#stats-metric').onchange=renderExerciseStats;$('#volume-toggle').onchange=()=>{const d=catalog.find(e=>e.id===$('#stats-exercise').value);if(!d)return;d.volumeEnabled=$('#volume-toggle').checked;saveCatalog();renderExerciseStats()};
 setBusy(true);renderToday();db.open().then(async()=>{let data=await db.read();if(data.history.some(w=>w.schemaVersion!==2)||(data.draft&&data.draft.schemaVersion!==2)){const snapshot={migratedAt:new Date().toISOString(),history:data.history,draft:data.draft},migrated=data.history.map(w=>w.schemaVersion===2?w:model.legacy(w,true)),next=data.draft?(data.draft.schemaVersion===2?data.draft:model.legacy(data.draft)):null;await db.migrate(migrated,next,snapshot);data=await db.read();toast('Старая история перенесена.')}history=data.history.map(w=>model.validate(w,true));draft=data.draft?model.validate(data.draft,false,true):model.empty();catalog=Array.isArray(data.catalog)?data.catalog.map(validateDefinition):[];legacySnapshot=data.legacySnapshot;ready=true;renderToday();storageOK();setBusy(false);if(data.backup)$('#backup-info').textContent='Последний экспорт: '+new Date(data.backup).toLocaleString('ru-RU')}).catch(e=>{setBusy(false);storageError(e)});setupWorker();
