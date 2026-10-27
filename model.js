@@ -73,6 +73,10 @@
           if (!Number.isFinite(restSec) || restSec < 0 || restSec > 86400) throw new Error('Некорректный отдых группы.');
           clean.restSec = restSec;
         }
+        if (group.order !== undefined) {
+          if (!Array.isArray(group.order) || group.order.length > 100 || group.order.some(item => typeof item !== 'string' || !item || item.length > 150) || new Set(group.order).size !== group.order.length) throw new Error('Некорректный порядок упражнений комплекса.');
+          clean.order = [...group.order];
+        }
         return clean;
       });
       if (groups.length) out.groups = groups;
@@ -104,6 +108,9 @@
       out.sections.push({ id: section.id, exercises });
     });
     if (count > 100) throw new Error('Слишком много упражнений.');
+    for (const group of out.groups || []) {
+      if (group.order) group.order = group.order.filter(id => out.sections.some(section => section.exercises.some(exercise => exercise.id === id && exercise.groupId === group.id)));
+    }
     if (completed) {
       if (!count || typeof value.completedAt !== 'string' || Number.isNaN(Date.parse(value.completedAt))) throw new Error('Некорректная завершённая тренировка.');
       out.id = str(value.id, 150, 'id тренировки', true); out.completedAt = new Date(value.completedAt).toISOString();
