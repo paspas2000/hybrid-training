@@ -3,7 +3,7 @@
 const $=s=>document.querySelector(s), {sections,db,model}=Hybrid, {fields,keys,uid}=model;
 const clone=x=>JSON.parse(JSON.stringify(x)), names=Object.fromEntries(fields.map(f=>[f[0],f]));
 const metricNames={setsCount:'Записи / подходы',weightKgMax:'Максимальный вес, кг',addedWeightKgMax:'Максимальный доп. вес, кг',repsSum:'Повторения',durationSecSum:'Время, мин',distanceMSum:'Дистанция, км',roundsSum:'Круги',volume:'Объём, кг × повт.',pace:'Темп, мин/км'};
-let history=[],draft=model.empty(),catalog=[],legacySnapshot,ready=false,busy=false,pickerSection,pickerGroupId,editingGroupId,pendingImport,waitingWorker,queue=Promise.resolve(),toastTimer;
+let history=[],draft=model.empty(),catalog=[],legacySnapshot,ready=false,busy=false,pickerSection,pickerGroupId,editingGroupId,groupSectionId,pendingImport,waitingWorker,queue=Promise.resolve(),toastTimer;
 const el=(tag,value='',className='')=>{const e=document.createElement(tag);e.textContent=value;e.className=className;return e};
 const btn=(value,action,className='text-button',aria='')=>{const e=el('button',value,className);e.type='button';if(aria)e.setAttribute('aria-label',aria);e.onclick=action;return e};
 const count=w=>w.sections.reduce((n,s)=>n+s.exercises.length,0),empty=w=>!count(w)&&!w.note&&!w.sessionRpe&&!(w.groups?.length);
@@ -30,8 +30,8 @@ function visible(d){return d.fields.filter(k=>keys.includes(k))}
 function makeRecord(source){const r={id:uid(),note:source?.note||''};keys.forEach(k=>{if(source?.[k]!==undefined&&source[k]!=='')r[k]=source[k]});for(const key of ['weightBasis','bodyweightMode'])if(source?.[key])r[key]=source[key];return r}
 function renderToday(){
  $('#workout-date').value=draft.date;$('#workout-note').value=draft.note;$('#session-rpe').value=draft.sessionRpe||'';const root=$('#sections');root.replaceChildren();
- sections.forEach(section=>{const card=el('section','','section-card');card.dataset.section=section.id;const head=el('div','','section-head'),title=el('div','','section-text');title.append(el('h2',section.title),el('p',section.subtitle));head.append(el('span',section.number,'section-number'),title,btn('+ Добавить',()=>openPicker(section),'add-button'));card.append(head);root.append(card)});
- renderGroups();
+ sections.forEach(section=>{const card=el('section','','section-card');card.dataset.section=section.id;const head=el('div','','section-head'),title=el('div','','section-text'),actions=el('div','','section-actions');title.append(el('h2',section.title),el('p',section.subtitle));actions.append(btn('+ Комплекс',()=>openGroup(null,section),'add-button'),btn('+ Добавить',()=>openPicker(section),'add-button'));head.append(el('span',section.number,'section-number'),title,actions);card.append(head);renderSectionItems(section,card);root.append(card)});
+ renderFlow();
  updateTotal()
 }
 const draftExercises=()=>draft.sections.flatMap((section,index)=>section.exercises.map(exercise=>({exercise,section:sections[index]})));
@@ -44,25 +44,33 @@ function flowItems(workout){
 }
 function ensureDraftOrder(){draft.order=flowItems(draft).map(item=>item.token)}
 function syncDraftOrder(){ensureDraftOrder();saveDraft();renderToday()}
-function renderGroups(){
- const root=$('#group-list');root.replaceChildren();$('#add-group').disabled=!ready||busy||(draft.groups||[]).length>=30;
- const flow=flowItems(draft);if(!flow.length)root.append(el('p','Добавь упражнение из блока ниже или создай комплекс.','flow-empty'));
+function groupSection(group){return group.sectionId&&sections.some(section=>section.id===group.sectionId)?group.sectionId:null}
+function renderFlow(){
+ const root=$('#group-list');root.replaceChildren();const flow=flowItems(draft);if(!flow.length){root.append(el('p','Добавь упражнение или комплекс в одном из блоков ниже.','flow-empty'));return}
  for(const item of flow){
+  const label=item.type==='group'?'Комплекс · '+item.group.name:item.exercise.name,sectionId=item.type==='group'?groupSection(item.group):item.section.id,section=sections.find(value=>value.id===sectionId),row=el('div','','flow-item');
+  const position=flow.findIndex(entry=>entry.token===item.token),up=btn('↑',()=>moveFlowItem(item.token,-1),'icon-button','Поднять '+label),down=btn('↓',()=>moveFlowItem(item.token,1),'icon-button','Опустить '+label);up.disabled=position===0;down.disabled=position===flow.length-1;
+  row.append(el('span',String(position+1),'flow-number'),el('div',label+(section?' · '+section.title:''),'flow-label'),up,down);root.append(row);
+ }
+}
+function renderSectionItems(section,root){
+ const items=flowItems(draft).filter(item=>item.type==='group'?groupSection(item.group)===section.id:item.section.id===section.id);
+ if(!items.length){root.append(el('p','Добавь упражнение или создай комплекс в этом блоке.','empty-section'));return}
+ for(const item of items){
   if(item.type==='exercise'){root.append(renderExercise(item.exercise,item.section,item.position));continue}
   const group=item.group;
   const card=el('div','','group-card'),members=groupMembers(draft,group),head=el('div','','group-card-head');
-  const position=flow.findIndex(entry=>entry.token===item.token),up=btn('↑',()=>moveFlowItem(item.token,-1),'icon-button','Поднять комплекс '+group.name),down=btn('↓',()=>moveFlowItem(item.token,1),'icon-button','Опустить комплекс '+group.name);up.disabled=position===0;down.disabled=position===flow.length-1;
-  head.append(el('strong',group.name),up,down,btn('Изменить',()=>openGroup(group),'text-button'),btn('×',()=>removeGroup(group),'icon-button','Удалить комплекс '+group.name));card.append(head);
+  head.append(el('strong',group.name),btn('Изменить',()=>openGroup(group),'text-button'),btn('×',()=>removeGroup(group),'icon-button','Удалить комплекс '+group.name));card.append(head);
   const details=[group.rounds?group.rounds+' '+plural(group.rounds,['круг','круга','кругов']):'',group.restSec!==undefined?'отдых '+fmt(group.restSec)+' сек':''].filter(Boolean);
   if(details.length)card.append(el('p',details.join(' · '),'muted'));if(group.note)card.append(el('p',group.note,'muted note-text'));
   if(!members.length)card.append(el('p','Добавь первое упражнение комплекса.','group-empty'));
   members.forEach(({exercise,index,position})=>card.append(renderExercise(exercise,draft.sections[index],position,group)));
-  card.append(btn('+ Упражнение в комплекс',()=>openPicker(sections[2],group.id),'secondary group-add'));root.append(card);
+  card.append(btn('+ Упражнение в комплекс',()=>openPicker(section,group.id),'secondary group-add'));root.append(card);
  }
 }
-function openGroup(group=null){
+function openGroup(group=null,section=null){
  if(!ready||busy||(!group&&(draft.groups||[]).length>=30))return;
- editingGroupId=group?.id||null;$('#group-title').textContent=group?'Изменить комплекс':'Новый комплекс';$('#group-name').value=group?.name||'';$('#group-rounds').value=group?.rounds??'';$('#group-rest').value=group?.restSec??'';$('#group-note').value=group?.note||'';$('#group-error').hidden=true;$('#group-members-field').hidden=!count(draft);
+ editingGroupId=group?.id||null;groupSectionId=group?groupSection(group):section?.id||'capacity';$('#group-title').textContent=group?'Изменить комплекс':'Новый комплекс';$('#group-section').textContent=(sections.find(item=>item.id===groupSectionId)?.number||'')+' · '+(sections.find(item=>item.id===groupSectionId)?.title||'Общий ход тренировки');$('#group-name').value=group?.name||'';$('#group-rounds').value=group?.rounds??'';$('#group-rest').value=group?.restSec??'';$('#group-note').value=group?.note||'';$('#group-error').hidden=true;$('#group-members-field').hidden=!count(draft);
  const root=$('#group-member-options');root.replaceChildren();flowItems(draft).flatMap(item=>item.type==='group'?groupMembers(draft,item.group):[item]).forEach(({exercise,index})=>{const label=el('label','','group-member'),input=document.createElement('input');input.type='checkbox';input.value=exercise.id;input.checked=!!group&&exercise.groupId===group.id;label.append(input,document.createTextNode(sections[index].number+' · '+exercise.name));root.append(label)});
  $('#group-dialog').showModal();
 }
@@ -290,11 +298,11 @@ function setupWorker(){if(!('serviceWorker'in navigator)){$('#connection').textC
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));$('#close-picker').onclick=()=>$('#picker').close();$('#exercise-search').oninput=renderPicker;
 Hybrid.equipmentLabels.forEach(([key,label])=>$('#equipment-filter').add(new Option(label,key)));$('#custom-equipment').add(new Option('Не указывать',''));Hybrid.equipmentLabels.filter(([key])=>key!=='all').forEach(([key,label])=>$('#custom-equipment').add(new Option(label,key)));$('#equipment-filter').onchange=renderPicker;
 sections.forEach(section=>$('#picker-section').add(new Option(section.title,section.id)));$('#picker-section').onchange=()=>{pickerSection=sections.find(section=>section.id===$('#picker-section').value);$('#exercise-search').value='';renderPicker()};
-$('#add-group').onclick=()=>openGroup();$('#close-group').onclick=()=>$('#group-dialog').close();
+$('#close-group').onclick=()=>$('#group-dialog').close();
 $('#group-form').onsubmit=event=>{
  event.preventDefault();if(!ready||busy)return;ensureDraftOrder();
  const selected=new Set([...document.querySelectorAll('#group-member-options input:checked')].map(input=>input.value)),id=editingGroupId||uid(),previous=(draft.groups||[]).find(item=>item.id===id);
- const group={id,name:$('#group-name').value.trim(),note:$('#group-note').value.trim()};
+ const group={id,name:$('#group-name').value.trim(),note:$('#group-note').value.trim(),sectionId:groupSectionId||'capacity'};
  if($('#group-rounds').value!=='')group.rounds=Number($('#group-rounds').value);
  if($('#group-rest').value!=='')group.restSec=Number($('#group-rest').value);
  const prior=previous?groupMembers(draft,previous).map(item=>item.exercise.id):[],order=prior.filter(item=>selected.has(item)),released=prior.filter(item=>!selected.has(item));

@@ -63,6 +63,11 @@
         if (groupIds.has(id)) throw new Error('Повторяющийся ID группы.');
         groupIds.add(id);
         const clean = { id, name: str(group.name, 100, 'Название группы', true), note: str(group.note ?? '', 1000, 'Заметка группы') };
+        if (group.sectionId != null && group.sectionId !== '') {
+          const sectionId = str(group.sectionId, 50, 'Секция комплекса', true);
+          if (!Hybrid.sections.some(section => section.id === sectionId)) throw new Error('Некорректная секция комплекса.');
+          clean.sectionId = sectionId;
+        }
         if (group.rounds != null && group.rounds !== '') {
           const rounds = Number(group.rounds);
           if (!Number.isInteger(rounds) || rounds < 1 || rounds > 1000) throw new Error('Некорректное число кругов группы.');
@@ -110,6 +115,10 @@
     if (count > 100) throw new Error('Слишком много упражнений.');
     for (const group of out.groups || []) {
       if (group.order) group.order = group.order.filter(id => out.sections.some(section => section.exercises.some(exercise => exercise.id === id && exercise.groupId === group.id)));
+      if (!group.sectionId) {
+        const memberSections = out.sections.filter(section => section.exercises.some(exercise => exercise.groupId === group.id));
+        if (memberSections.length === 1) group.sectionId = memberSections[0].id;
+      }
     }
     if (value.order !== undefined) {
       if (!Array.isArray(value.order) || value.order.length > 130 || value.order.some(item => typeof item !== 'string' || item.length > 152 || !/^[eg]:.+$/.test(item)) || new Set(value.order).size !== value.order.length) throw new Error('Некорректный порядок тренировки.');

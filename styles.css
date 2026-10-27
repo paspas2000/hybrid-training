@@ -71,13 +71,7 @@
 .variant-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin:-4px 0 10px}
 .variant-chip{min-height:34px;padding:5px 9px;border:1px solid var(--line);border-radius:18px;background:var(--soft);color:var(--ink);font-size:11px}
 .group-panel{margin:0 0 20px}
-.group-card{padding:16px 0 0}
-.group-card-head{flex-wrap:wrap}
-.group-card-head strong{min-width:120px;font-size:16px}
-.group-card>.exercise{margin:12px 0;border:1px solid var(--line);border-radius:12px;background:var(--white)}
-.group-card .group-tag{margin:0 0 12px}
-.group-card .group-add{margin-top:12px;width:100%;white-space:normal}
-.group-card .group-empty{margin-top:14px;color:var(--muted)}
+.sections{gap:18px}.section-card{box-shadow:0 8px 22px #142b2608}.section-head{padding:22px 24px}.section-card>.exercise{margin:0 14px 14px;border:1px solid var(--line);border-radius:14px;overflow:hidden}.section-card>.exercise:first-of-type{margin-top:0}.empty-section{padding:0 24px 24px 52px;margin:0}.group-card{padding:0}.section-card>.group-card{margin:0 14px 14px;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--white);box-shadow:0 4px 12px #142b2606}.group-card-head{flex-wrap:wrap;gap:8px}.group-card-head strong{min-width:120px;font-size:16px;letter-spacing:-.2px}.group-card>.exercise{margin:12px 0;border:1px solid var(--line);border-radius:12px;background:var(--paper)}.group-card .group-tag{margin:0 0 12px}.group-card .group-add{margin-top:14px;width:100%;white-space:normal}.group-card .group-empty{margin:14px 0 0;color:var(--muted);font-size:13px}.group-card>.muted{margin:8px 0 0}.group-card-head .text-button{margin-left:auto;padding:8px 4px;min-height:34px}
 .history-group{margin:18px 0;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
 .history-group h3{margin:0 0 8px;font-size:14px}.history-group .history-item{padding:10px 0}.history-group .history-item:last-child{padding-bottom:0}
 @media(max-width:560px){.group-panel-head{flex-wrap:wrap}.group-panel-head .secondary{width:100%;white-space:normal}.group-card-head{gap:4px}.group-card>.exercise{padding:14px}}
@@ -85,6 +79,9 @@
 .flow-list>.exercise{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--white)}
 .flow-list>.group-card:first-child{border-top:0}
 .flow-empty{margin:15px 0 0;color:var(--muted)}
+.section-actions{display:flex;align-items:center;gap:7px;flex-shrink:0}.section-actions .add-button{min-height:38px;padding:7px 11px}.flow-list{margin-top:14px}.flow-item{display:flex;align-items:center;gap:8px;padding:11px 4px;border-top:1px solid var(--line)}.flow-item:first-child{border-top:0}.flow-number{width:22px;text-align:center;color:var(--muted);font-size:12px}.flow-label{flex:1;min-width:0;font-size:12px;line-height:1.45;overflow-wrap:anywhere}.flow-item .icon-button{width:32px;height:32px;font-size:17px}
+.group-home{margin:-8px 0 18px;color:var(--muted);font-size:12px;line-height:1.5}.group-home strong{color:var(--ink)}
+@media(max-width:560px){.sections{gap:14px}.section-head{padding:18px 15px}.section-actions{gap:2px}.section-actions .add-button{font-size:10px;padding:7px 8px}.empty-section{padding:0 15px 19px 37px}.section-card>.group-card,.section-card>.exercise{margin-left:9px;margin-right:9px;margin-bottom:9px}.section-card>.group-card{padding:14px}.flow-item{gap:3px}.flow-label{font-size:11px}}
 .compact-record{padding:8px 10px}
 .record-main{display:grid;grid-template-columns:22px repeat(2,minmax(0,1fr)) 38px;align-items:end;gap:7px}
 .record-main .record-number{align-self:center;text-align:center;font-size:13px;color:var(--muted)}
