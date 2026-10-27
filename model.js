@@ -158,6 +158,18 @@
     if (completed) { out.id = value.id; out.completedAt = value.completedAt; }
     return validate(out, completed);
   }
+  function template(value) {
+    if (!value || typeof value !== 'object') throw new Error('Некорректный шаблон.');
+    const out = {
+      id: str(value.id, 150, 'ID шаблона', true),
+      name: str(value.name, 100, 'Название шаблона', true),
+      createdAt: str(value.createdAt, 80, 'Дата создания шаблона', true),
+      workout: validate(value.workout, false, false)
+    };
+    if (Number.isNaN(Date.parse(out.createdAt))) throw new Error('Некорректная дата создания шаблона.');
+    if (!out.workout.sections.some(section => section.exercises.length)) throw new Error('Шаблон должен содержать хотя бы одно упражнение.');
+    return out;
+  }
   function metrics(exercise) {
     const records = exercise.records || [];
     const values = key => records.map(r => Number(r[key])).filter((n, i) => rHas(records[i], key) && Number.isFinite(n));
@@ -187,5 +199,5 @@
     }
     return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, records]) => ({ date, metrics: metrics({ records }) }));
   }
-  Hybrid.model = { fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, filled, metrics, dailyMetrics };
+  Hybrid.model = { fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, template, filled, metrics, dailyMetrics };
 })();

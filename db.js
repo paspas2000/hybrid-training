@@ -38,8 +38,9 @@
       const draft = tx.objectStore('settings').get('draft');
       const backup = tx.objectStore('settings').get('backup');
       const catalog = tx.objectStore('settings').get('catalog');
+      const templates = tx.objectStore('settings').get('templates');
       const legacySnapshot = tx.objectStore('settings').get('legacySnapshot');
-      return () => ({ history: history.result, draft: draft.result, backup: backup.result, catalog: catalog.result, legacySnapshot: legacySnapshot.result });
+      return () => ({ history: history.result, draft: draft.result, backup: backup.result, catalog: catalog.result, templates: templates.result, legacySnapshot: legacySnapshot.result });
     }),
     draft: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'draft')),
     finish: workout => transaction(['history', 'settings'], 'readwrite', tx => {
@@ -47,13 +48,15 @@
       tx.objectStore('settings').delete('draft');
     }),
     deleteWorkout: id => transaction(['history'], 'readwrite', tx => tx.objectStore('history').delete(id)),
-    import: (history, draft, catalog) => transaction(['history', 'settings'], 'readwrite', tx => {
+    import: (history, draft, catalog, templates) => transaction(['history', 'settings'], 'readwrite', tx => {
       history.forEach(workout => tx.objectStore('history').add(workout));
       if (draft) tx.objectStore('settings').put(draft, 'draft');
       if (catalog) tx.objectStore('settings').put(catalog, 'catalog');
+      if (templates) tx.objectStore('settings').put(templates, 'templates');
     }),
     backup: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'backup')),
     catalog: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'catalog')),
+    templates: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'templates')),
     migrate: (history, draft, snapshot) => transaction(['history', 'settings'], 'readwrite', tx => {
       const workouts = tx.objectStore('history'), settings = tx.objectStore('settings');
       history.forEach(workout => workouts.put(workout));
