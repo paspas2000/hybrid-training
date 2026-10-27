@@ -97,4 +97,5 @@
 .record-extra .record-fields{margin:9px 0}.record-extra>input{margin-top:8px}
 .exercise-settings{margin:6px 0}.exercise-settings>summary{cursor:pointer;padding:6px 0;font-size:11px;color:var(--accent);font-weight:700}
 .exercise-settings .field-options{margin:8px 0}.exercise-settings .variant-suggestions{margin:0 0 8px}
+.trait-summary{margin:8px 0 12px;color:var(--muted);font-size:11px;line-height:1.55}
 @media(max-width:400px){.record-main{grid-template-columns:16px repeat(2,minmax(0,1fr)) 32px;gap:5px}.record-main .icon-button{width:32px}.record-extra{margin-left:21px}}

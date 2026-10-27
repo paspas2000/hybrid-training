@@ -16,6 +16,8 @@ function latest(id,variant=null){for(const w of sorted()){const found=matches(w,
 const basisNames={total:'вес общий',perHand:'вес на руку',perImplement:'вес на снаряд'};
 const bodyweightNames={self:'свой вес',weighted:'с доп. весом',assisted:'с помощью'};
 function result(r){const parts=fields.filter(([key])=>r[key]!==undefined&&r[key]!=='').map(([key,label,unit])=>label.toLowerCase()+' '+fmt(key==='durationSec'?Number(r[key])/60:Number(r[key]))+(unit?' '+unit:''));if(r.weightKg!==undefined&&r.weightBasis)parts.push(basisNames[r.weightBasis]);if(r.bodyweightMode)parts.push(bodyweightNames[r.bodyweightMode]);if(r.note)parts.push(r.note);return parts.join(' · ')||'Без параметров'}
+function traitsFor(id){return Hybrid.exerciseTraits?.[id]||null}
+function traitText(id){const traits=traitsFor(id),labels=Hybrid.traitLabels;if(!traits||!labels)return'';return 'Профиль: '+labels.areas[traits.area]+' · '+traits.patterns.map(item=>labels.patterns[item]).join(', ')+' · '+traits.muscles.map(item=>labels.muscles[item]).join(', ')}
 function toast(s){clearTimeout(toastTimer);$('#toast').textContent=s;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,5000)}
 function storageError(e){console.error(e);$('#save-state').textContent='Не сохранено';$('#storage-error').textContent='Ошибка хранения. Экспортируй JSON, не закрывая страницу. '+(e.message||'');$('#storage-error').hidden=false}
 function storageOK(){$('#storage-error').hidden=true;$('#save-state').textContent='Черновик сохранён'}
@@ -110,7 +112,7 @@ function renderExercise(exercise,section,index,group=null){
  controls.append(up,down,btn('×',()=>{if((exercise.records.some(model.filled)||exercise.note)&&!confirm('Убрать «'+exercise.name+'»?'))return;section.exercises.splice(index,1);if(group?.order)group.order=group.order.filter(id=>id!==exercise.id);syncDraftOrder()},'icon-button','Убрать '+exercise.name));head.append(controls);card.append(head);
  card.append(el('p',(sections.find(item=>item.id===section.id)?.title||section.id)+(exercise.variant?' · '+exercise.variant:''),'group-tag'));
  const last=latest(exercise.exerciseId,exercise.variant||''),lastRecord=last?.exercise.records[last.exercise.records.length-1];card.append(el('p',last?'Последний раз '+dateLabel(last.workout.date)+': '+(lastRecord?result(lastRecord)+(last.exercise.records.length>1?' · '+last.exercise.records.length+' '+plural(last.exercise.records.length,['запись','записи','записей']):''):last.exercise.note||'без параметров'):'Пока нет результатов','last-result'));
- const settings=el('details','','exercise-settings');settings.append(el('summary','Вариант и поля упражнения'));card.append(settings);
+ const settings=el('details','','exercise-settings');settings.append(el('summary','Вариант и поля упражнения'));const profile=traitText(exercise.exerciseId);if(profile)settings.append(el('p',profile,'trait-summary'));card.append(settings);
  const variantWrap=el('label','Вариант выполнения (необязательно)','variant-label'),variant=document.createElement('input');variant.type='text';variant.maxLength=100;variant.placeholder='Например: с виса, фронтальный, интервальный';variant.value=exercise.variant||'';variant.oninput=()=>{if(variant.value.trim())exercise.variant=variant.value;else delete exercise.variant;saveDraft()};variant.onchange=()=>{const value=variant.value.trim(),known=variantsFor(exercise.exerciseId,def),canonical=known.find(item=>item.toLocaleLowerCase('ru')===value.toLocaleLowerCase('ru'));if(value){exercise.variant=canonical||value;def.variants??=[];if(!canonical&&def.variants.length<50){def.variants.push(value);saveCatalog()}}else delete exercise.variant;saveDraft();renderToday()};variantWrap.append(variant);settings.append(variantWrap);
  const suggestions=variantsFor(exercise.exerciseId,def).slice(0,5);if(suggestions.length){const chips=el('div','','variant-suggestions');suggestions.forEach(value=>chips.append(btn(value,()=>{exercise.variant=value;saveDraft();renderToday()},'variant-chip')));settings.append(chips)}
  const options=el('details','','field-options');options.append(el('summary','Поля записи'));const toggles=el('div','','field-toggles');
@@ -292,6 +294,24 @@ function renderBasisOptions(){
  select.value=[...select.options].some(option=>option.value===previous)?previous:'all';
  $('#basis-option').hidden=bases.size<2;
 }
+function renderDistribution(){
+ const panel=$('#distribution-panel'),root=$('#distribution-chart');root.replaceChildren();
+ const bySection=new Map(sections.map(section=>[section.id,0])),byPattern=new Map(),byArea=new Map();
+ for(const workout of history)for(const section of workout.sections)for(const exercise of section.exercises){
+  const amount=exercise.records.length;if(!amount)continue;bySection.set(section.id,(bySection.get(section.id)||0)+amount);
+  const traits=traitsFor(exercise.exerciseId);if(!traits)continue;
+  byArea.set(traits.area,(byArea.get(traits.area)||0)+amount);
+  traits.patterns.forEach(pattern=>byPattern.set(pattern,(byPattern.get(pattern)||0)+amount));
+ }
+ const sectionPoints=sections.map(section=>({label:section.number,value:bySection.get(section.id)||0}));
+ const patternPoints=[...byPattern].sort((a,b)=>b[1]-a[1]).map(([pattern,value])=>({label:Hybrid.traitLabels.patterns[pattern],value}));
+ const areaPoints=[...byArea].map(([area,value])=>({label:Hybrid.traitLabels.areas[area],value}));
+ panel.hidden=!sectionPoints.some(point=>point.value);
+ if(panel.hidden)return;
+ root.append(makeChart('Записи по блокам',sectionPoints));
+ if(areaPoints.length)root.append(makeChart('Записи по области нагрузки',areaPoints));
+ if(patternPoints.length)root.append(makeChart('Записи по двигательным паттернам',patternPoints));
+}
 function renderStats(){
  const grid=$('#activity-grid');grid.replaceChildren();
  const counts=new Map();history.forEach(w=>counts.set(w.date,(counts.get(w.date)||0)+1));
@@ -300,6 +320,7 @@ function renderStats(){
   const date=day.getFullYear()+'-'+String(day.getMonth()+1).padStart(2,'0')+'-'+String(day.getDate()).padStart(2,'0');
   const cell=el('span','','activity-cell level-'+Math.min(counts.get(date)||0,4));cell.title=date+': '+(counts.get(date)||0);cell.setAttribute('aria-label',cell.title);grid.append(cell);
  }
+ renderDistribution();
  const effortWorkouts=[...history].filter(workout=>workout.sessionRpe).sort((a,b)=>a.date.localeCompare(b.date)||a.completedAt.localeCompare(b.completedAt));
  const sectionEffort=sections.map(section=>({section,workouts:[...history].filter(workout=>workout.sectionRpe?.[section.id]).sort((a,b)=>a.date.localeCompare(b.date)||a.completedAt.localeCompare(b.completedAt))})).filter(entry=>entry.workouts.length);
  $('#effort-panel').hidden=!effortWorkouts.length&&!sectionEffort.length;const effortChart=$('#effort-chart');effortChart.replaceChildren();
