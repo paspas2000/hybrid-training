@@ -78,6 +78,22 @@
           if (!Number.isFinite(restSec) || restSec < 0 || restSec > 86400) throw new Error('Некорректный отдых группы.');
           clean.restSec = restSec;
         }
+        if (group.result != null) {
+          const result = record(group.result);
+          if (filled(result)) clean.result = result;
+        }
+        if (group.roundResults !== undefined) {
+          if (!Array.isArray(group.roundResults) || group.roundResults.length > 1000) throw new Error('Некорректные результаты кругов.');
+          const seenRounds = new Set();
+          const roundResults = group.roundResults.map(value => {
+            if (!value || typeof value !== 'object') throw new Error('Некорректный результат круга.');
+            const round = Number(value.round);
+            if (!Number.isInteger(round) || round < 1 || round > 1000 || seenRounds.has(round)) throw new Error('Некорректный номер круга.');
+            seenRounds.add(round);
+            return { round, ...record(value) };
+          }).filter(result => filled(result));
+          if (roundResults.length) clean.roundResults = roundResults;
+        }
         if (group.order !== undefined) {
           if (!Array.isArray(group.order) || group.order.length > 100 || group.order.some(item => typeof item !== 'string' || !item || item.length > 150) || new Set(group.order).size !== group.order.length) throw new Error('Некорректный порядок упражнений комплекса.');
           clean.order = [...group.order];
