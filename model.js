@@ -54,6 +54,18 @@
       if (!Number.isInteger(effort) || effort < 1 || effort > 10) throw new Error('Оценка сложности должна быть от 1 до 10.');
       out.sessionRpe = effort;
     }
+    if (value.sectionRpe != null) {
+      if (!value.sectionRpe || typeof value.sectionRpe !== 'object' || Array.isArray(value.sectionRpe)) throw new Error('Некорректные оценки блоков.');
+      const ratings = {};
+      for (const section of Hybrid.sections) {
+        const valueForSection = value.sectionRpe[section.id];
+        if (valueForSection == null || valueForSection === '') continue;
+        const effort = Number(valueForSection);
+        if (!Number.isInteger(effort) || effort < 1 || effort > 10) throw new Error('Оценка сложности блока должна быть от 1 до 10.');
+        ratings[section.id] = effort;
+      }
+      if (Object.keys(ratings).length) out.sectionRpe = ratings;
+    }
     if (value.groups !== undefined) {
       if (!Array.isArray(value.groups) || value.groups.length > 30) throw new Error('Некорректные группы упражнений.');
       const groupIds = new Set();
@@ -128,6 +140,10 @@
       });
       out.sections.push({ id: section.id, exercises });
     });
+    if (out.sectionRpe) {
+      for (const sectionId of Object.keys(out.sectionRpe)) if (!out.sections.find(section => section.id === sectionId)?.exercises.length) delete out.sectionRpe[sectionId];
+      if (!Object.keys(out.sectionRpe).length) delete out.sectionRpe;
+    }
     if (count > 100) throw new Error('Слишком много упражнений.');
     for (const group of out.groups || []) {
       if (group.order) group.order = group.order.filter(id => out.sections.some(section => section.exercises.some(exercise => exercise.id === id && exercise.groupId === group.id)));

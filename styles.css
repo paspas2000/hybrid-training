@@ -44,6 +44,7 @@
 .section-card[data-section="capacity"]{background:#eaeef1;border-color:#dbe3e8}
 .section-card[data-section="endurance"]{background:#e9f0ed;border-color:#d7e3dd}
 .section-card .exercise{background:var(--white)}
+.section-effort{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 22px 18px 50px;color:var(--muted);font-size:11px;font-weight:650}.section-effort select{min-height:38px;max-width:190px;border:1px solid var(--line);border-radius:8px;background:var(--white);color:var(--ink);padding:7px;font-size:12px}.section-effort select:disabled{opacity:.55}
 @media(max-width:560px){.section-number{display:block}}
 .record-context{display:grid;gap:6px;margin-top:9px;font-size:11px;font-weight:650;color:var(--muted)}
 .record-context select{width:100%;min-height:40px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--white);color:var(--ink);font-size:14px}
@@ -85,6 +86,7 @@
 .group-results{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}.group-results>summary{cursor:pointer;font-size:12px;font-weight:700}.group-results h4{font-size:12px;margin:15px 0 8px}.group-result-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.group-result-fields label,.round-result label{display:grid;gap:4px;font-size:10px;font-weight:650;color:var(--muted)}.group-result-fields input,.group-results>input,.round-result input{width:100%;min-width:0;min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);padding:7px;font-size:15px}.group-results>input{margin-top:8px}.round-result-list{display:grid;gap:8px}.round-result{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}.round-result-head{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between}.round-result-head strong{font-size:12px}.round-result-head .icon-button{width:30px;height:30px;font-size:18px}.group-results .small{margin-top:10px}
 @media(max-width:560px){.group-result-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.round-result{grid-template-columns:1fr}}
 @media(max-width:560px){.sections{gap:14px}.section-head{padding:18px 15px}.section-actions{gap:2px}.section-actions .add-button{font-size:10px;padding:7px 8px}.empty-section{padding:0 15px 19px 37px}.section-card>.group-card,.section-card>.exercise{margin-left:9px;margin-right:9px;margin-bottom:9px}.section-card>.group-card{padding:14px}.flow-item{gap:3px}.flow-label{font-size:11px}}
+@media(max-width:560px){.section-effort{padding:0 15px 15px 37px;align-items:flex-start;flex-direction:column;gap:6px}.section-effort select{width:100%;max-width:none}}
 .compact-record{padding:8px 10px}
 .record-main{display:grid;grid-template-columns:22px repeat(2,minmax(0,1fr)) 38px;align-items:end;gap:7px}
 .record-main .record-number{align-self:center;text-align:center;font-size:13px;color:var(--muted)}
