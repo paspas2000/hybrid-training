@@ -18,6 +18,32 @@ const bodyweightNames={self:'свой вес',weighted:'с доп. весом',a
 function result(r){const parts=fields.filter(([key])=>r[key]!==undefined&&r[key]!=='').map(([key,label,unit])=>label.toLowerCase()+' '+fmt(key==='durationSec'?Number(r[key])/60:Number(r[key]))+(unit?' '+unit:''));if(r.weightKg!==undefined&&r.weightBasis)parts.push(basisNames[r.weightBasis]);if(r.bodyweightMode)parts.push(bodyweightNames[r.bodyweightMode]);if(r.note)parts.push(r.note);return parts.join(' · ')||'Без параметров'}
 function traitsFor(id){return Hybrid.exerciseTraits?.[id]||null}
 function traitText(id){const traits=traitsFor(id),labels=Hybrid.traitLabels;if(!traits||!labels)return'';return 'Профиль: '+labels.areas[traits.area]+' · '+traits.patterns.map(item=>labels.patterns[item]).join(', ')+' · '+traits.muscles.map(item=>labels.muscles[item]).join(', ')}
+function workoutProfile(workout){
+ const profile={sections:new Set(),areas:new Set(),patterns:new Set(),records:0};
+ for(const section of workout.sections)for(const exercise of section.exercises){
+  const amount=exercise.records.length||1;profile.sections.add(section.id);profile.records+=amount;
+  const traits=traitsFor(exercise.exerciseId);if(!traits)continue;
+  profile.areas.add(traits.area);traits.patterns.forEach(pattern=>profile.patterns.add(pattern));
+ }
+ return profile
+}
+function tipCard(title,text,reason){const card=el('article','','tip-card');card.append(el('h2',title),el('p',text));if(reason)card.append(el('p','Почему: '+reason,'tip-reason'));return card}
+function renderTips(){
+ const root=$('#tips-list');root.replaceChildren();const workouts=sorted();
+ if(!workouts.length){root.append(el('article','','empty-state'));root.firstChild.append(el('h2','Пока рано для подсказок'),el('p','Заверши первую тренировку — здесь появится краткий, предварительный разбор её структуры.'));return}
+ const latestWorkout=workouts[0],latest=workoutProfile(latestWorkout),latestSections=[...latest.sections].map(id=>sections.find(section=>section.id===id)).filter(Boolean);
+ root.append(tipCard(workouts.length===1?'Первая тренировка — первая точка отсчёта':'Основание подсказок','Последняя тренировка: '+dateLabel(latestWorkout.date)+' · '+latestSections.map(section=>section.number+' '+section.title).join(', ')+'.','Использованы только сохранённые записи; это не оценка восстановления.'));
+ const addRecommendation=(title,text,reason)=>{if(root.children.length>=4)return;root.append(tipCard(title,text,reason))};
+ const heavy=sections.find(section=>latestWorkout.sectionRpe?.[section.id]>=8);
+ if(heavy)addRecommendation('Необязательно повторять тяжёлый блок','Если сегодня снова выберешь «'+heavy.title+'», можно рассмотреть более лёгкую технику, меньший объём или другой блок.','В последней тренировке этот блок был оценён на '+latestWorkout.sectionRpe[heavy.id]+'/10.');
+ if((latest.patterns.has('squat')||latest.patterns.has('hinge'))&&!latest.patterns.has('horizontalPress')&&!latest.patterns.has('verticalPress')&&!latest.patterns.has('horizontalPull')&&!latest.patterns.has('verticalPull'))addRecommendation('Вариант для баланса верха','Если хочется дополнить следующую тренировку, можно рассмотреть жим или тягу для верха тела.','В последней записи были паттерны нижней части тела, но не было жимов или тяг.');
+ else if((latest.patterns.has('horizontalPress')||latest.patterns.has('verticalPress'))&&!latest.patterns.has('horizontalPull')&&!latest.patterns.has('verticalPull'))addRecommendation('Вариант для баланса тяги','Можно рассмотреть горизонтальную или вертикальную тягу — например, тягу в наклоне или подтягивания.','В последней записи был жимовой паттерн, но не было тягового.');
+ else if((latest.patterns.has('horizontalPull')||latest.patterns.has('verticalPull'))&&!latest.patterns.has('horizontalPress')&&!latest.patterns.has('verticalPress'))addRecommendation('Вариант для баланса жима','Можно рассмотреть горизонтальный или вертикальный жим, если это соответствует самочувствию и цели занятия.','В последней записи был тяговый паттерн, но не было жимового.');
+ if(!latest.sections.has('endurance'))addRecommendation('Циклическая работа — по желанию','Если хочется добавить отдельный тип нагрузки, можно выбрать спокойный бег, греблю, велосипед или другую циклическую работу.','В последней тренировке не было блока выносливости.');
+ const recent=workouts.slice(0,2).map(workoutProfile);
+ if(recent.length===2&&recent.every(profile=>profile.areas.has('lower'))&&recent.every(profile=>!profile.areas.has('upper')))addRecommendation('Повторяется акцент на низ','В следующем занятии можно рассмотреть верх тела или более нейтральную работу, если это согласуется с твоим планом.','В двух последних тренировках есть упражнения с профилем «низ», без отдельного профиля «верх».');
+ if(root.children.length===1)addRecommendation('Продолжай собирать историю','Сейчас данных мало для более точных сопоставлений. После новых тренировок подсказки станут разнообразнее.','Пока это одна структура тренировки без явного перекоса.');
+}
 function toast(s){clearTimeout(toastTimer);$('#toast').textContent=s;$('#toast').hidden=false;toastTimer=setTimeout(()=>$('#toast').hidden=true,5000)}
 function storageError(e){console.error(e);$('#save-state').textContent='Не сохранено';$('#storage-error').textContent='Ошибка хранения. Экспортируй JSON, не закрывая страницу. '+(e.message||'');$('#storage-error').hidden=false}
 function storageOK(){$('#storage-error').hidden=true;$('#save-state').textContent='Черновик сохранён'}
@@ -363,7 +389,7 @@ function renderExerciseStats(){
  });
  if(!entries.length)list.append(el('p','Пока нет результатов.','muted'));
 }
-function switchView(name){document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!==name+'-view');document.querySelectorAll('[data-view]').forEach(b=>{const active=b.dataset.view===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(name==='history')renderHistory();if(name==='stats')renderStats();if(name==='data')renderTemplates();window.scrollTo(0,0)}
+function switchView(name){document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!==name+'-view');document.querySelectorAll('[data-view]').forEach(b=>{const active=b.dataset.view===name;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(name==='history')renderHistory();if(name==='stats')renderStats();if(name==='tips')renderTips();if(name==='data')renderTemplates();window.scrollTo(0,0)}
 function validateDefinition(d){
  if(!d||typeof d.id!=='string'||!d.id||d.id.length>150||typeof d.name!=='string'||!d.name.trim()||d.name.length>100||!Array.isArray(d.fields)||d.fields.some(k=>!keys.includes(k))||!['m','km'].includes(d.distanceUnit)||typeof d.volumeEnabled!=='boolean'||(d.bodyweight!==undefined&&typeof d.bodyweight!=='boolean')||(d.favorite!==undefined&&typeof d.favorite!=='boolean'))throw Error('Некорректная настройка упражнения.');
  const equipment=d.equipment??Hybrid.equipment[d.id]??'',allowed=new Set(Hybrid.equipmentLabels.map(([key])=>key));
