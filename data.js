@@ -6,7 +6,8 @@ window.Hybrid = {
       ['clean', 'Взятие штанги на грудь'], ['handstand', 'Стойка на руках'], ['medball', 'Броски медбола'],
       ['barbell-snatch', 'Рывок штанги'], ['barbell-jerk', 'Толчок штанги от груди'],
       ['clean-and-jerk', 'Взятие и толчок штанги'], ['kb-clean', 'Взятие гири на грудь'],
-      ['kb-jerk', 'Толчок гири'], ['push-press', 'Пуш-пресс']
+      ['kb-jerk', 'Толчок гири'], ['push-press', 'Пуш-пресс'],
+      ["single-leg-hop","Прыжки на одной ноге"], ["direction-jump","Прыжки со сменой направления"], ["explosive-pushup","Взрывные отжимания"], ["pogo-jump","Подскоки"], ["jump-lunge","Прыжковые выпады"], ["skips","Подскоки с продвижением (скипы)"]
     ]},
     { id: 'strength', number: '02', title: 'Сила', subtitle: 'Контролируемая работа с сопротивлением.', exercises: [
       ['squat', 'Приседания со штангой'], ['deadlift', 'Становая тяга'], ['bench', 'Жим лёжа'],
@@ -14,7 +15,8 @@ window.Hybrid = {
       ['row', 'Тяга в наклоне'], ['lunge', 'Выпады'], ['pushup', 'Отжимания'],
       ['romanian-deadlift', 'Румынская тяга'], ['bulgarian-split-squat', 'Болгарские сплит-приседания'],
       ['lat-pulldown', 'Тяга вертикального блока'], ['seated-row', 'Тяга горизонтального блока'],
-      ['hip-thrust', 'Ягодичный мост со штангой']
+      ['hip-thrust', 'Ягодичный мост со штангой'],
+      ["front-squat","Фронтальный присед"], ["back-extension","Гиперэкстензия"], ["neck-work","Упражнения для мышц шеи"]
     ]},
     { id: 'capacity', number: '03', title: 'Работоспособность / прикладная сила', subtitle: 'Повторные усилия. Удержание. Перемещение.', exercises: [
       ['jump', 'Прыжки на тумбу'], ['farmer', 'Фермерская прогулка'], ['sled-push', 'Толкание саней'],
@@ -22,7 +24,8 @@ window.Hybrid = {
       ['kb-swing', 'Махи гирей'], ['stepup', 'Зашагивания на тумбу'], ['ruck', 'Ходьба с рюкзаком'],
       ['kb-goblet-squat', 'Приседания с гирей'], ['sandbag-shoulder', 'Подъём мешка на плечо'],
       ['loaded-hold', 'Удержание груза'], ['overhead-carry', 'Перенос груза над головой'],
-      ['battle-ropes', 'Работа с канатами']
+      ['battle-ropes', 'Работа с канатами'],
+      ["shoulder-carry","Перенос груза на плече"], ["front-carry","Перенос груза перед собой"], ["kb-long-cycle","Гиревой длинный цикл"]
     ]},
     { id: 'endurance', number: '04', title: 'Выносливость', subtitle: 'Продолжительная и интервальная циклическая работа.', exercises: [
       ['run', 'Бег'], ['bike', 'Велосипед'], ['rowing', 'Гребля'], ['swim', 'Плавание'],
@@ -75,3 +78,69 @@ window.Hybrid = {
     'stair-climber': ['durationSec', 'reps']
   }
 };
+
+// Library metadata never rewrites saved workout IDs or results.
+(() => {
+ const h=window.Hybrid;
+ h.libraryStatus={};
+ const additional=new Set(['skips','handstand','medball','kb-clean','lat-pulldown','seated-row','hip-thrust','jump','stepup','ruck','kb-goblet-squat','sandbag-shoulder','overhead-carry','battle-ropes','walk','ski','airbike','elliptical','xc-ski','stair-climber']);
+ h.sections.forEach(s=>s.exercises.forEach(([id])=>h.libraryStatus[id]=additional.has(id)?'additional':'main'));
+ h.defaultVariants={lunge:['На месте','В ходьбе','Назад'],bench:['Со штангой','С гантелями','На наклонной скамье'],'explosive-pushup':['С отрывом рук','С хлопком','С перемещением к цели'],'single-leg-hop':['На месте','С продвижением'],'direction-jump':['В стороны','К заданной цели'],'broad-jump':['Одиночный прыжок','С последующим вертикальным прыжком'],'jump-rope':['На двух ногах','На одной ноге'],pullup:['Прямой хват','Обратный хват','Нейтральный хват'],row:['Со штангой','С гантелью','С опорой грудью'],'barbell-snatch':['С пола','С виса'],clean:['С пола','С виса'],run:['Непрерывно','Интервалы']};
+ Object.assign(h.equipment,{skips:'bodyweight','single-leg-hop':'bodyweight','direction-jump':'bodyweight','explosive-pushup':'bodyweight','pogo-jump':'bodyweight','jump-lunge':'bodyweight','front-squat':'barbell','back-extension':'bodyweight','neck-work':'other','shoulder-carry':'load','front-carry':'load','kb-long-cycle':'kettlebell','bulgarian-split-squat':'load',lunge:'load'});
+ Object.assign(h.presets,{skips:['distanceM','reps'],'single-leg-hop':['reps','distanceM'],'direction-jump':['reps'],'explosive-pushup':['reps'],'pogo-jump':['reps'],'jump-lunge':['reps'],'back-extension':['reps','weightKg'],'neck-work':['reps'],'shoulder-carry':['weightKg','distanceM'],'front-carry':['weightKg','distanceM'],'kb-long-cycle':['weightKg','durationSec','reps']});
+ const traits=(area,patterns,muscles)=>({area,patterns,muscles});
+ for(const id of ['single-leg-hop','direction-jump','pogo-jump','jump-lunge'])h.exerciseTraits[id]=traits('lower',['jump'],['quads','glutes','calves','core']);
+ h.exerciseTraits.skips=traits('full',['jump','locomotion'],['quads','glutes','calves','core']);
+ h.exerciseTraits['explosive-pushup']=traits('upper',['horizontalPress'],['chest','shoulders','arms','core']);
+ h.exerciseTraits['front-squat']=traits('lower',['squat'],['quads','glutes','core']);
+ h.exerciseTraits['back-extension']=traits('lower',['hinge'],['glutes','hamstrings','back']);
+ h.traitLabels.patterns.neck='движения шеи';h.traitLabels.muscles.neck='мышцы шеи';
+ h.exerciseTraits['neck-work']=traits('upper',['neck'],['neck']);
+ for(const id of ['shoulder-carry','front-carry'])h.exerciseTraits[id]=traits('full',['carry'],['back','core','grip','quads','glutes']);
+ h.exerciseTraits['kb-long-cycle']=traits('full',['hinge','verticalPress','cyclic'],['quads','glutes','back','shoulders','arms','core','grip']);
+ h.traitLabels.qualities={maxStrength:'Максимальная сила',relativeStrength:'Относительная сила',power:'Взрывная мощность',reactivity:'Реактивность',speed:'Максимальная скорость',coordination:'Координация',strengthEndurance:'Силовая работоспособность',aerobic:'Аэробная выносливость',anaerobic:'Анаэробная работоспособность'};
+ // Qualities describe typical use, not the measured intensity of a record.
+ h.exerciseQualities={};
+ const assign=(ids,primary,secondary=[])=>ids.split(' ').forEach(id=>h.exerciseQualities[id]={primary,secondary});
+ assign('barbell-snatch clean barbell-jerk clean-and-jerk kb-snatch kb-clean kb-jerk push-press medball explosive-pushup broad-jump','power'.split(' '),['coordination']);
+ assign('pogo-jump',['reactivity'],['coordination']);
+ assign('single-leg-hop jump-lunge',['power'],['coordination']);
+ assign('direction-jump',['coordination'],['power']);
+ assign('skips',['coordination'],['reactivity']);assign('sprint',['speed'],['power']);assign('handstand',['coordination'],['relativeStrength']);
+ assign(h.sections.find(s=>s.id==='strength').exercises.map(([id])=>id).join(' '),['maxStrength'],['strengthEndurance']);
+ assign('pullup dip pushup',['relativeStrength'],['maxStrength']);
+ assign(h.sections.find(s=>s.id==='capacity').exercises.map(([id])=>id).join(' '),['strengthEndurance'],['anaerobic']);
+ assign('jump',['power'],['coordination']);
+ assign(h.sections.find(s=>s.id==='endurance').exercises.map(([id])=>id).join(' '),['aerobic'],['anaerobic']);
+})();
+
+// Revision before personalization: explicit directions, stable independent IDs.
+(() => {
+ const h=window.Hybrid;
+ const add=(section,id,name,equipment,traits,qualities,fields)=>{
+   h.sections.find(s=>s.id===section).exercises.push([id,name]);h.equipment[id]=equipment;
+   h.exerciseTraits[id]=traits;h.exerciseQualities[id]=qualities;h.presets[id]=fields;
+ };
+ add('strength','zercher-squat','Присед Зерхера','barbell',{area:'lower',patterns:['squat','hold'],muscles:['quads','glutes','back','core','arms']},{primary:['maxStrength'],secondary:['strengthEndurance']},['weightKg','reps']);
+ add('strength','dumbbell-row','Тяга гантели','load',{area:'upper',patterns:['horizontalPull'],muscles:['back','lats','arms','core']},{primary:['maxStrength'],secondary:['strengthEndurance']},['weightKg','reps']);
+ add('skill','vertical-jump','Вертикальный прыжок','bodyweight',{area:'lower',patterns:['jump'],muscles:['quads','glutes','calves','core']},{primary:['power'],secondary:['coordination']},['reps','distanceM']);
+ h.directionLabels={olympic:'Тяжелоатлетическая мощность',kettlebellPower:'Гиревой навык и мощность',jumpPower:'Прыжковая мощность',reactivity:'Реактивность',speed:'Максимальная скорость',upperPower:'Взрывная сила верха',coordination:'Координация',squat:'Приседание',hinge:'Тазовый шарнир',unilateral:'Односторонняя сила ног',verticalPull:'Вертикальная тяга',horizontalPull:'Горизонтальная тяга',press:'Жим',neck:'Сила шеи',handCarry:'Перенос в руках',awkwardCarry:'Неудобный груз',repeatedStrength:'Повторная силовая работа',longCycle:'Продолжительная комплексная работа',hold:'Удержание',cyclic:'Циклическая выносливость'};
+ const directions={};
+ const group=(direction,ids)=>ids.split(' ').forEach(id=>directions[id]=direction);
+ group('olympic','barbell-snatch barbell-jerk clean clean-and-jerk');group('kettlebellPower','kb-snatch kb-jerk kb-clean');
+ group('jumpPower','broad-jump vertical-jump jump jump-lunge');group('reactivity','pogo-jump single-leg-hop');group('speed','sprint');group('upperPower','explosive-pushup medball push-press');group('coordination','handstand direction-jump skips');
+ group('squat','squat front-squat zercher-squat kb-goblet-squat');group('hinge','deadlift romanian-deadlift back-extension hip-thrust');group('unilateral','lunge bulgarian-split-squat stepup');group('verticalPull','pullup lat-pulldown');group('horizontalPull','row dumbbell-row seated-row');group('press','press dip bench pushup');group('neck','neck-work');
+ group('handCarry','farmer');group('awkwardCarry','sandbag shoulder-carry front-carry sandbag-shoulder overhead-carry ruck');group('repeatedStrength','kb-swing burpee sled-push sled-pull battle-ropes');group('longCycle','kb-long-cycle');group('hold','loaded-hold');
+ group('cyclic',h.sections.find(s=>s.id==='endurance').exercises.map(([id])=>id).join(' '));
+ const main=new Set('barbell-snatch barbell-jerk kb-snatch kb-jerk broad-jump pogo-jump sprint explosive-pushup squat front-squat zercher-squat romanian-deadlift lunge pullup dumbbell-row press dip bench farmer sandbag kb-swing kb-long-cycle run rowing bike'.split(' '));
+ h.defaultVariants.farmer=['В двух руках','В одной руке'];h.defaultVariants.sandbag=['Перед собой','На плече'];h.defaultVariants['kb-snatch']=['С одной гирей','С двумя гирями'];h.defaultVariants['kb-jerk']=['С одной гирей','С двумя гирями'];
+ h.defaultVariants['dumbbell-row']=['С опорой рукой','С опорой грудью'];h.defaultVariants['vertical-jump']=['С места','С разбега'];
+ h.formatLabels={sets:'Подходы',continuous:'Непрерывная работа',intervals:'Интервалы',circuit:'В составе комплекса'};
+ h.exerciseProfiles={};
+ for(const section of h.sections)for(const [id,name] of section.exercises){
+   const t=h.exerciseTraits[id],q=h.exerciseQualities[id];
+   h.libraryStatus[id]=main.has(id)?'main':'additional';
+   h.exerciseProfiles[id]={id,name,sectionId:section.id,direction:directions[id],areas:t.area==='full'?['upper','lower']: [t.area],area:t.area,patterns:[...t.patterns],muscles:[...t.muscles],primaryQualities:[...q.primary],secondaryQualities:[...q.secondary],fields:[...(h.presets[id]||['weightKg','reps'])],formats:['sets','continuous','intervals','circuit'],equipment:[h.equipment[id]],status:h.libraryStatus[id]};
+ }
+ // Holding a bar in a squat does not count as carrying a load.
+})();

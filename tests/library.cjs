@@ -1,0 +1,9 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),cp=require('node:child_process');
+const load=text=>{const c={window:{}};vm.runInNewContext(text,c);return c.window.Hybrid},h=load(fs.readFileSync('data.js','utf8')),old=load(cp.execFileSync('git',['show','HEAD:data.js'],{encoding:'utf8'}));
+const ids=h.sections.flatMap(s=>s.exercises.map(([id])=>id));assert.equal(ids.length,new Set(ids).size);
+for(const s of old.sections)for(const [id,name] of s.exercises)assert(h.sections.find(x=>x.id===s.id).exercises.some(x=>x[0]===id&&x[1]===name));
+for(const id of ids){const p=h.exerciseProfiles[id];assert(p,id);assert(h.directionLabels[p.direction],id);assert.equal(p.status,h.libraryStatus[id]);for(const key of p.fields)assert(['weightKg','addedWeightKg','reps','durationSec','distanceM','rounds'].includes(key));for(const key of [...p.primaryQualities,...p.secondaryQualities])assert(h.traitLabels.qualities[key]);for(const key of p.patterns)assert(h.traitLabels.patterns[key]);assert(p.equipment.every(key=>h.equipmentLabels.some(([id])=>id===key)));assert(p.formats.every(key=>h.formatLabels[key]));}
+for(const id of ['squat','front-squat','zercher-squat']){assert.equal(h.exerciseProfiles[id].direction,'squat');assert.equal(h.libraryStatus[id],'main')}
+assert(!h.exerciseProfiles['zercher-squat'].patterns.includes('carry'));assert.notEqual(h.exerciseProfiles.row.id,h.exerciseProfiles['dumbbell-row'].id);
+for(const id of ['push-press','deadlift','clean','single-leg-hop','direction-jump','jump-lunge','burpee','sled-push','loaded-hold','swim','jump-rope'])assert.equal(h.libraryStatus[id],'additional',id);
+console.log('PASS: complete profiles and dictionaries; legacy IDs, names and sections preserved; separate squat/row IDs; compact core. '+ids.length+' exercises, '+Object.values(h.libraryStatus).filter(s=>s==='main').length+' main.');

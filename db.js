@@ -37,23 +37,26 @@
       const history = tx.objectStore('history').getAll();
       const draft = tx.objectStore('settings').get('draft');
       const backup = tx.objectStore('settings').get('backup');
+      const editing = tx.objectStore('settings').get('editing');
       const catalog = tx.objectStore('settings').get('catalog');
       const templates = tx.objectStore('settings').get('templates');
       const legacySnapshot = tx.objectStore('settings').get('legacySnapshot');
-      return () => ({ history: history.result, draft: draft.result, backup: backup.result, catalog: catalog.result, templates: templates.result, legacySnapshot: legacySnapshot.result });
+      return () => ({ history: history.result, draft: draft.result, backup: backup.result, editing: editing.result, catalog: catalog.result, templates: templates.result, legacySnapshot: legacySnapshot.result });
     }),
     draft: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'draft')),
     finish: workout => transaction(['history', 'settings'], 'readwrite', tx => {
       tx.objectStore('history').add(workout);
       tx.objectStore('settings').delete('draft');
     }),
-    updateWorkout: workout => transaction(['history'], 'readwrite', tx => tx.objectStore('history').put(workout)),
+    updateWorkout: workout => transaction(['history','settings'], 'readwrite', tx => {tx.objectStore('history').put(workout);tx.objectStore('settings').delete('editing')}),
+    editing: value => transaction(['settings'],'readwrite',tx=>value?tx.objectStore('settings').put(value,'editing'):tx.objectStore('settings').delete('editing')),
     deleteWorkout: id => transaction(['history'], 'readwrite', tx => tx.objectStore('history').delete(id)),
-    import: (history, draft, catalog, templates) => transaction(['history', 'settings'], 'readwrite', tx => {
+    import: (history, draft, catalog, templates, extra={}) => transaction(['history', 'settings'], 'readwrite', tx => {
       history.forEach(workout => tx.objectStore('history').add(workout));
       if (draft) tx.objectStore('settings').put(draft, 'draft');
       if (catalog) tx.objectStore('settings').put(catalog, 'catalog');
       if (templates) tx.objectStore('settings').put(templates, 'templates');
+      for(const key of ['editing','legacySnapshot','backup'])if(extra[key]!=null)tx.objectStore('settings').put(extra[key],key);
     }),
     backup: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'backup')),
     catalog: value => transaction(['settings'], 'readwrite', tx => tx.objectStore('settings').put(value, 'catalog')),

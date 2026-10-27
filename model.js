@@ -41,10 +41,27 @@
       out.bodyweightMode = value.bodyweightMode;
     }
     if (out.bodyweightMode && out.bodyweightMode !== 'weighted' && Number(out.addedWeightKg) > 0) throw new Error('Дополнительный вес не соответствует способу выполнения.');
+    if (value.attempts != null) {
+      const a=value.attempts;
+      if (!a || typeof a!=='object' || Array.isArray(a)) throw new Error('Некорректные попытки.');
+      out.attempts={};
+      for (const key of ['successful','failed']) {
+        const raw=a[key], n=Number(raw);
+        if ((typeof raw!=='number' && typeof raw!=='string') || (typeof raw==='string' && !raw.trim()) || !Number.isInteger(n) || n<0 || n>100000) throw new Error('Попытки должны быть целыми числами от 0 до 100000.');
+        out.attempts[key]=n;
+      }
+      const total=out.attempts.successful+out.attempts.failed;
+      if (a.total!==undefined && a.total!==total) throw new Error('Общее число попыток не совпадает с результатами.');
+    }
+    if (value.kind != null && value.kind!=='') {
+      if (!['warmup','technique','working'].includes(value.kind)) throw new Error('Некорректный тип подхода.');
+      out.kind=value.kind;
+    }
+    for(const key of ['pending','marked'])if(value[key]!==undefined){if(typeof value[key]!=='boolean')throw Error('Некорректное состояние записи.');if(value[key])out[key]=true}
     out.note = str(value.note ?? '', 1000, 'Заметка записи');
     return out;
   }
-  const filled = rec => keys.some(key => rec[key] !== undefined && rec[key] !== null && rec[key] !== '') || !!rec.note?.trim();
+  const filled = rec => keys.some(key => rec[key] !== undefined && rec[key] !== null && rec[key] !== '') || !!rec.note?.trim() || Number(rec.attempts?.successful)>0 || Number(rec.attempts?.failed)>0 || rec.marked===true;
   function validate(value, completed = false, incomplete = false) {
     if (!value || value.schemaVersion !== 2 || !validDate(value.date) || !Array.isArray(value.sections) || value.sections.length !== Hybrid.sections.length) throw new Error('Некорректная структура тренировки.');
     const ids = new Set(); let count = 0;
@@ -85,6 +102,7 @@
           if (!Number.isInteger(rounds) || rounds < 1 || rounds > 1000) throw new Error('Некорректное число кругов группы.');
           clean.rounds = rounds;
         }
+        if(group.plannedRounds!==undefined){const n=Number(group.plannedRounds);if(!Number.isInteger(n)||n<1||n>1000)throw Error('Некорректный план кругов.');if(!completed)clean.plannedRounds=n}
         if (group.restSec != null && group.restSec !== '') {
           const restSec = Number(group.restSec);
           if (!Number.isFinite(restSec) || restSec < 0 || restSec > 86400) throw new Error('Некорректный отдых группы.');
@@ -92,7 +110,7 @@
         }
         if (group.result != null) {
           const result = record(group.result);
-          if (filled(result)) clean.result = result;
+          if (filled(result)&&(!completed||!result.pending)) clean.result = result;
         }
         if (group.roundResults !== undefined) {
           if (!Array.isArray(group.roundResults) || group.roundResults.length > 1000) throw new Error('Некорректные результаты кругов.');
@@ -103,7 +121,7 @@
             if (!Number.isInteger(round) || round < 1 || round > 1000 || seenRounds.has(round)) throw new Error('Некорректный номер круга.');
             seenRounds.add(round);
             return { round, ...record(value) };
-          }).filter(result => filled(result));
+          }).filter(result => filled(result)&&(!completed||!result.pending));
           if (roundResults.length) clean.roundResults = roundResults;
         }
         if (group.order !== undefined) {
@@ -126,7 +144,7 @@
           const clean = record(raw, incomplete);
           if (recordIds.has(clean.id)) throw new Error('Повторяющийся ID записи.'); recordIds.add(clean.id);
           return clean;
-        }).filter(clean => incomplete || filled(clean));
+        }).filter(clean => (!completed||!clean.pending)&&(incomplete || filled(clean)));
         count++;
         const clean = { id, exerciseId: str(exercise.exerciseId, 150, 'ID каталога', true), name: str(exercise.name, 100, 'Название', true), note: str(exercise.note ?? '', 2000, 'Заметка упражнения'), records };
         const variant = str(exercise.variant ?? '', 100, 'Вариант выполнения').trim();
@@ -159,7 +177,7 @@
       for (const item of available) if (!out.order.includes(item)) out.order.push(item);
     }
     if (completed) {
-      if (!count || typeof value.completedAt !== 'string' || Number.isNaN(Date.parse(value.completedAt))) throw new Error('Некорректная завершённая тренировка.');
+      if ((!count && !(out.groups||[]).some(g=>g.rounds||g.result||g.roundResults?.length)) || typeof value.completedAt !== 'string' || Number.isNaN(Date.parse(value.completedAt))) throw new Error('Некорректная завершённая тренировка.');
       out.id = str(value.id, 150, 'id тренировки', true); out.completedAt = new Date(value.completedAt).toISOString();
     }
     return out;
@@ -203,12 +221,22 @@
     return out;
   }
   function metrics(exercise) {
-    const records = exercise.records || [];
+    const records = (exercise.records || []).filter(r=>!r.pending);
     const values = key => records.map(r => Number(r[key])).filter((n, i) => rHas(records[i], key) && Number.isFinite(n));
     const sum = key => values(key).reduce((a, b) => a + b, 0);
     const max = key => Math.max(...values(key));
     const result = { setsCount: records.length };
+    const known=records.filter(r=>r.attempts && r.attempts.successful+r.attempts.failed>0);
+    if (known.length) {
+      result.successfulAttempts=known.reduce((n,r)=>n+r.attempts.successful,0);
+      result.failedAttempts=known.reduce((n,r)=>n+r.attempts.failed,0);
+      result.totalAttempts=result.successfulAttempts+result.failedAttempts;
+      result.successRate=result.successfulAttempts/result.totalAttempts*100;
+    }
     for (const key of keys) if (values(key).length) result[key === 'weightKg' || key === 'addedWeightKg' ? key + 'Max' : key + 'Sum'] = key === 'weightKg' || key === 'addedWeightKg' ? max(key) : sum(key);
+    const successfulWeights=records.filter(r=>Number(r.attempts?.successful)>0&&rHas(r,'weightKg')).map(r=>Number(r.weightKg));
+    if(successfulWeights.length)result.successfulWeightKgMax=Math.max(...successfulWeights);
+    if(values('distanceM').length)result.distanceMMax=max('distanceM');
     const volumeRecords = records.filter(r => rHas(r, 'weightKg') && rHas(r, 'reps'));
     if (volumeRecords.length && volumeRecords.every(r => !r.weightBasis || r.weightBasis === 'total')) result.volume = volumeRecords.reduce((total, r) => total + Number(r.weightKg) * Number(r.reps), 0);
     const paceRecords = records.filter(r => Number(r.durationSec) > 0 && Number(r.distanceM) > 0);
@@ -231,5 +259,38 @@
     }
     return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, records]) => ({ date, metrics: metrics({ records }) }));
   }
-  Hybrid.model = { fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, template, filled, metrics, dailyMetrics };
+
+  function attemptBreakdown(exercises){
+    const groups=new Map();
+    for(const e of exercises)for(const r of e.records.filter(r=>!r.pending)){
+      const weight=rHas(r,'weightKg')?Number(r.weightKg):null,basis=r.weightBasis||'',variant=e.variant||'',key=JSON.stringify([variant,basis,weight]);
+      if(!groups.has(key))groups.set(key,{variant,basis,weight,successful:0,failed:0,unknownRecords:0});
+      const row=groups.get(key),total=Number(r.attempts?.successful||0)+Number(r.attempts?.failed||0);
+      if(total>0){row.successful+=Number(r.attempts.successful);row.failed+=Number(r.attempts.failed)}else row.unknownRecords++;
+    }
+    return [...groups.values()].map(row=>({...row,total:row.successful+row.failed,rate:row.successful+row.failed?row.successful/(row.successful+row.failed)*100:null})).sort((a,b)=>a.variant.localeCompare(b.variant)||a.basis.localeCompare(b.basis)||(a.weight??-1)-(b.weight??-1));
+  }
+  function distanceResults(exercises){
+    const groups=new Map();
+    for(const e of exercises)for(const r of e.records.filter(r=>!r.pending)){
+      if(!(Number(r.distanceM)>0&&Number(r.durationSec)>0))continue;
+      const distance=Number(r.distanceM),variant=e.variant||'',key=JSON.stringify([variant,distance]);
+      if(!groups.has(key))groups.set(key,{variant,distance,bestSec:Number(r.durationSec),count:0});
+      const row=groups.get(key);row.count++;row.bestSec=Math.min(row.bestSec,Number(r.durationSec));
+    }
+    return [...groups.values()].sort((a,b)=>a.variant.localeCompare(b.variant)||a.distance-b.distance);
+  }
+
+
+  const isActual=r=>!r.pending&&filled(r);
+  function pendingCount(w){return w.sections.reduce((n,s)=>n+s.exercises.reduce((m,e)=>m+e.records.filter(r=>r.pending).length,0),0)+(w.groups||[]).reduce((n,g)=>n+Number(!!g.result?.pending)+(g.roundResults||[]).filter(r=>r.pending).length+Number(!!g.plannedRounds),0)}
+  function actualize(value){const out=JSON.parse(JSON.stringify(value));
+    for(const s of out.sections)s.exercises=s.exercises.filter(e=>{const hadPending=e.records.some(r=>r.pending);e.records=e.records.filter(r=>!r.pending);return e.records.some(filled)||!hadPending&&!!e.note?.trim()});
+    out.groups=(out.groups||[]).filter(g=>{delete g.plannedRounds;if(g.result?.pending)delete g.result;g.roundResults=(g.roundResults||[]).filter(r=>!r.pending);if(!g.rounds&&g.roundResults.some(filled))g.rounds=g.roundResults.filter(filled).length;return out.sections.some(s=>s.exercises.some(e=>e.groupId===g.id))||g.rounds||g.result&&filled(g.result)||g.roundResults.some(filled)});
+    return out;
+  }
+  function parseDuration(value){const text=String(value).trim();if(!text)return null;let n;if(/^\d+:\d{2}(?:[.,]\d+)?$/.test(text)){const [min,sec]=text.replace(',','.').split(':');if(Number(sec)>=60)throw Error('Секунды после двоеточия: от 00 до 59.');n=Number(min)*60+Number(sec)}else if(/^\d+(?:[.,]\d+)?$/.test(text))n=Number(text.replace(',','.'));else throw Error('Время: секунды или мин:сек, например 5 или 1:30.');if(!Number.isFinite(n)||n>limits.durationSec)throw Error('Слишком большая длительность.');return n}
+  function formatDuration(value){if(value===undefined||value===null||value==='')return '';const n=Math.round(Number(value)*1000)/1000,min=Math.floor(n/60),sec=Math.round((n-min*60)*1000)/1000;return min+':'+(sec<10?'0':'')+String(sec)}
+
+  Hybrid.model = { isActual, pendingCount, actualize, parseDuration, formatDuration, attemptBreakdown, distanceResults, fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, template, filled, metrics, dailyMetrics };
 })();
