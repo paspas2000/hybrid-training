@@ -25,22 +25,5 @@
   const lookup=new Map(all.map(p=>[p.id,p])),out={workouts,patterns:{},primary:{},exercises:{},unknown:0};
   for(const w of workouts){const patterns=new Set(),primary=new Set(),exercises=new Set();for(const section of w.sections)for(const e of section.exercises){if(!e.records.some(h.model.isActual))continue;exercises.add(e.exerciseId);const p=lookup.get(e.exerciseId);if(!p){out.unknown++;continue}p.patterns.forEach(key=>patterns.add(key));p.primaryQualities.forEach(key=>primary.add(key));if(!p.patterns.length&&!p.primaryQualities.length)out.unknown++}for(const [key,seen] of [['patterns',patterns],['primary',primary],['exercises',exercises]])for(const id of seen)out[key][id]=(out[key][id]||0)+1;}return out;
  }
- function recommend(history,all,sectionId,date=h.model.today()){
-  const recent=analyze(history,all,{end:date,last:5}),n=recent.workouts.length;
-  const available=all.filter(p=>p.sectionId===sectionId&&p.status!=='hidden'&&!p.excluded);
-  const core=available.filter(p=>p.status==='main');
-  const lastSeen=new Map();for(const w of history)if(w.date<=date)for(const s of w.sections)for(const e of s.exercises)if(e.records.some(h.model.isActual)&&(!lastSeen.has(e.exerciseId)||lastSeen.get(e.exerciseId)<w.date))lastSeen.set(e.exerciseId,w.date);
-  const seen=id=>lastSeen.get(id)||'';
-  const rank=(a,b)=>(recent.exercises[a.id]||0)-(recent.exercises[b.id]||0)||seen(a.id).localeCompare(seen(b.id))||a.name.localeCompare(b.name,'ru');
-  const ranked=n<3?core:core.sort((a,b)=>Number(b.favorite)-Number(a.favorite)||rank(a,b)),ordered=[],seenPatterns=new Set();
-  if(n>=3){for(const p of ranked.filter(p=>p.favorite).slice(0,3)){ordered.push(p);p.patterns.filter(key=>key!=='hold').forEach(key=>seenPatterns.add(key))}for(const p of ranked){if(ordered.includes(p)||ordered.length>=3)continue;const primary=(p.patterns||[]).filter(key=>key!=='hold');if(primary.some(key=>seenPatterns.has(key)))continue;ordered.push(p);primary.forEach(key=>seenPatterns.add(key));if(ordered.length===3)break}for(const p of ranked)if(!ordered.includes(p))ordered.push(p)}
-  const suggestions=(n<3?core:ordered).map(p=>{
-   const count=recent.exercises[p.id]||0,patterns=p.patterns.map(key=>h.traitLabels.patterns[key]).join(', ');
-   const reason=n<3?'Основное упражнение этого блока. Для подсказок по истории нужно хотя бы 3 занятия.':count?'Встречалось в '+count+' из '+n+' последних занятий. Паттерн: '+(patterns||'не указан')+'.':'Не встречалось в последних '+n+' занятиях. Можно выбрать для разнообразия; это не свидетельство недостатка подготовки.';
-   return {id:p.id,name:p.name,reason:reason+(n>=3&&seen(p.id)?' Последний раз: '+seen(p.id)+'.':'')};
-  });
-  const recentExercises=all.filter(p=>p.sectionId===sectionId&&recent.exercises[p.id]).map(p=>({id:p.id,name:p.name,count:recent.exercises[p.id]}));
-  return {recentExercises,suggestions:n<3?suggestions:suggestions.slice(0,4),alternatives:available.filter(p=>p.status==='additional').map(p=>({id:p.id,name:p.name})),sample:n,patterns:recent.patterns};
- }
- h.coach={validateProfile,profiles,analyze,recommend};
+ h.coach={validateProfile,profiles,analyze};
 })();
