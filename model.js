@@ -66,6 +66,7 @@
     if (!value || value.schemaVersion !== 2 || !validDate(value.date) || !Array.isArray(value.sections) || value.sections.length !== Hybrid.sections.length) throw new Error('Некорректная структура тренировки.');
     const ids = new Set(); let count = 0;
     const out = { schemaVersion: 2, date: value.date, note: str(value.note, 2000, 'Заметка тренировки'), sections: [] };
+    if(value.sectionTiming!==undefined)out.sectionTiming=Hybrid.timing.validate(value.sectionTiming,completed);
     if (value.sessionRpe != null && value.sessionRpe !== '') {
       const effort = Number(value.sessionRpe);
       if (!Number.isInteger(effort) || effort < 1 || effort > 10) throw new Error('Оценка сложности должна быть от 1 до 10.');
@@ -149,6 +150,7 @@
         const clean = { id, exerciseId: str(exercise.exerciseId, 150, 'ID каталога', true), name: str(exercise.name, 100, 'Название', true), note: str(exercise.note ?? '', 2000, 'Заметка упражнения'), records };
         const variant = str(exercise.variant ?? '', 100, 'Вариант выполнения').trim();
         if (variant) clean.variant = variant;
+        if(exercise.rpe!=null&&exercise.rpe!==''){const n=Number(exercise.rpe);if(!Number.isInteger(n)||n<1||n>10)throw Error('Оценка упражнения — от 1 до 10.');clean.rpe=n;}
         if(exercise.format!=null&&exercise.format!==''){if(!Object.hasOwn(Hybrid.formatLabels,exercise.format))throw new Error('Некорректный формат работы.');clean.format=exercise.format;}
         if (exercise.groupId != null && exercise.groupId !== '') {
           const groupId = str(exercise.groupId, 150, 'ID группы упражнения', true);
@@ -160,7 +162,7 @@
       out.sections.push({ id: section.id, exercises });
     });
     if (out.sectionRpe) {
-      for (const sectionId of Object.keys(out.sectionRpe)) if (!out.sections.find(section => section.id === sectionId)?.exercises.length) delete out.sectionRpe[sectionId];
+      for (const sectionId of Object.keys(out.sectionRpe)) if (!out.sections.find(section => section.id === sectionId)?.exercises.length&&!out.sectionTiming?.[sectionId]&&!(out.groups||[]).some(g=>g.sectionId===sectionId)) delete out.sectionRpe[sectionId];
       if (!Object.keys(out.sectionRpe).length) delete out.sectionRpe;
     }
     if (count > 100) throw new Error('Слишком много упражнений.');
@@ -178,7 +180,7 @@
       for (const item of available) if (!out.order.includes(item)) out.order.push(item);
     }
     if (completed) {
-      if ((!count && !(out.groups||[]).some(g=>g.rounds||g.result||g.roundResults?.length)) || typeof value.completedAt !== 'string' || Number.isNaN(Date.parse(value.completedAt))) throw new Error('Некорректная завершённая тренировка.');
+      if ((!count && !Object.keys(out.sectionTiming||{}).length && !(out.groups||[]).some(g=>g.rounds||g.result||g.roundResults?.length)) || typeof value.completedAt !== 'string' || Number.isNaN(Date.parse(value.completedAt))) throw new Error('Некорректная завершённая тренировка.');
       out.id = str(value.id, 150, 'id тренировки', true); out.completedAt = new Date(value.completedAt).toISOString();
     }
     return out;
@@ -217,6 +219,7 @@
       createdAt: str(value.createdAt, 80, 'Дата создания шаблона', true),
       workout: validate(value.workout, false, false)
     };
+    delete out.workout.sectionTiming;delete out.workout.sessionRpe;delete out.workout.sectionRpe;for(const section of out.workout.sections)for(const e of section.exercises)delete e.rpe;
     if (Number.isNaN(Date.parse(out.createdAt))) throw new Error('Некорректная дата создания шаблона.');
     if (!out.workout.sections.some(section => section.exercises.length)) throw new Error('Шаблон должен содержать хотя бы одно упражнение.');
     return out;

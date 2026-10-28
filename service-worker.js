@@ -1,9 +1,9 @@
 'use strict';
 // Increase VERSION whenever any app-shell file changes.
-const VERSION = 'v4.3.0';
+const VERSION = 'v5.0.0';
 const PREFIX = 'hybrid-training:' + self.registration.scope + ':';
 const CACHE = PREFIX + VERSION;
-const SHELL = ['./', './index.html', './styles.css', './data.js', './db.js', './model.js', './coach.js', './progress.js', './app.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const SHELL = ['./', './index.html', './styles.css', './data.js', './db.js', './model.js', './coach.js', './timing.js', './simple-stats.js', './app.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 const ASSETS = new Set(SHELL.map(path => new URL(path, self.registration.scope).href));
 self.addEventListener('install', event => {
   // Ignore the browser's HTTP cache when a new worker warms its offline shell.
