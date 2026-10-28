@@ -149,6 +149,7 @@
         const clean = { id, exerciseId: str(exercise.exerciseId, 150, 'ID каталога', true), name: str(exercise.name, 100, 'Название', true), note: str(exercise.note ?? '', 2000, 'Заметка упражнения'), records };
         const variant = str(exercise.variant ?? '', 100, 'Вариант выполнения').trim();
         if (variant) clean.variant = variant;
+        if(exercise.format!=null&&exercise.format!==''){if(!Object.hasOwn(Hybrid.formatLabels,exercise.format))throw new Error('Некорректный формат работы.');clean.format=exercise.format;}
         if (exercise.groupId != null && exercise.groupId !== '') {
           const groupId = str(exercise.groupId, 150, 'ID группы упражнения', true);
           if (!groupIds.has(groupId)) throw new Error('Упражнение ссылается на отсутствующую группу.');
