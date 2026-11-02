@@ -28,9 +28,12 @@
     if (!Number.isFinite(n) || n < 0 || n > limits[key] || ((key === 'reps' || key === 'rounds') && !Number.isInteger(n))) throw new Error(`Некорректное значение «${fields.find(f => f[0] === key)[1]}».`);
     return n;
   }
+  const setCount = r => r.sets == null || r.sets === '' ? 1 : Number(r.sets);
   function record(value, incomplete = false) {
     if (!value || typeof value !== 'object') throw new Error('Некорректная запись.');
     const out = { id: str(value.id, 150, 'id записи', true) };
+    if(value.sets!=null&&value.sets!==''){const n=Number(value.sets);if(!['number','string'].includes(typeof value.sets)||!Number.isInteger(n)||n<1||n>500)throw Error('Подходы: целое число от 1 до 500.');out.sets=n}
+    if(value.circuitRound!==undefined){if(!Number.isInteger(value.circuitRound)||value.circuitRound<1||value.circuitRound>500)throw Error('Некорректный круг записи.');out.circuitRound=value.circuitRound}
     keys.forEach(key => { const n = number(value[key], key, incomplete); if (n !== null) out[key] = n; });
     if (value.weightBasis != null && value.weightBasis !== '') {
       if (!weightBases.includes(value.weightBasis)) throw new Error('Некорректный способ указания веса.');
@@ -93,6 +96,7 @@
         if (groupIds.has(id)) throw new Error('Повторяющийся ID группы.');
         groupIds.add(id);
         const clean = { id, name: str(group.name, 100, 'Название группы', true), note: str(group.note ?? '', 1000, 'Заметка группы') };
+        if(group.entryMode!==undefined){if(group.entryMode!=='rounds')throw Error('Некорректный режим комплекса.');clean.entryMode='rounds'}
         if (group.sectionId != null && group.sectionId !== '') {
           const sectionId = str(group.sectionId, 50, 'Секция комплекса', true);
           if (!Hybrid.sections.some(section => section.id === sectionId)) throw new Error('Некорректная секция комплекса.');
@@ -167,6 +171,9 @@
     }
     if (count > 100) throw new Error('Слишком много упражнений.');
     for (const group of out.groups || []) {
+      if(group.entryMode==='rounds')for(const section of out.sections)for(const e of section.exercises.filter(e=>e.groupId===group.id)){
+        const rounds=e.records.map(r=>r.circuitRound||1);if(new Set(rounds).size!==rounds.length)throw Error('Повторяющийся круг упражнения.');
+      }
       if (group.order) group.order = group.order.filter(id => out.sections.some(section => section.exercises.some(exercise => exercise.id === id && exercise.groupId === group.id)));
       if (!group.sectionId) {
         const memberSections = out.sections.filter(section => section.exercises.some(exercise => exercise.groupId === group.id));
@@ -225,11 +232,11 @@
     return out;
   }
   function metrics(exercise) {
-    const records = (exercise.records || []).filter(r=>!r.pending);
+    const records = (exercise.records || []).filter(r=>!r.pending&&filled(r));
     const values = key => records.map(r => Number(r[key])).filter((n, i) => rHas(records[i], key) && Number.isFinite(n));
-    const sum = key => values(key).reduce((a, b) => a + b, 0);
+    const sum = key => records.filter(r=>rHas(r,key)).reduce((n,r)=>n+Number(r[key])*setCount(r),0);
     const max = key => Math.max(...values(key));
-    const result = { setsCount: records.length };
+    const result = { setsCount: records.reduce((n,r)=>n+setCount(r),0) };
     const known=records.filter(r=>r.attempts && r.attempts.successful+r.attempts.failed>0);
     if (known.length) {
       result.successfulAttempts=known.reduce((n,r)=>n+r.attempts.successful,0);
@@ -242,9 +249,9 @@
     if(successfulWeights.length)result.successfulWeightKgMax=Math.max(...successfulWeights);
     if(values('distanceM').length)result.distanceMMax=max('distanceM');
     const volumeRecords = records.filter(r => rHas(r, 'weightKg') && rHas(r, 'reps'));
-    if (volumeRecords.length && volumeRecords.every(r => !r.weightBasis || r.weightBasis === 'total')) result.volume = volumeRecords.reduce((total, r) => total + Number(r.weightKg) * Number(r.reps), 0);
+    if (volumeRecords.length && volumeRecords.every(r => !r.weightBasis || r.weightBasis === 'total')) result.volume = volumeRecords.reduce((total, r) => total + Number(r.weightKg) * Number(r.reps) * setCount(r), 0);
     const paceRecords = records.filter(r => Number(r.durationSec) > 0 && Number(r.distanceM) > 0);
-    if (paceRecords.length) result.pace = paceRecords.reduce((a, r) => a + Number(r.durationSec), 0) / paceRecords.reduce((a, r) => a + Number(r.distanceM), 0) * 1000 / 60;
+    if (paceRecords.length) result.pace = paceRecords.reduce((a, r) => a + Number(r.durationSec)*setCount(r), 0) / paceRecords.reduce((a, r) => a + Number(r.distanceM)*setCount(r), 0) * 1000 / 60;
     return result;
   }
   const rHas = (r, key) => r[key] !== undefined && r[key] !== null && r[key] !== '';
@@ -280,7 +287,7 @@
       if(!(Number(r.distanceM)>0&&Number(r.durationSec)>0))continue;
       const distance=Number(r.distanceM),variant=e.variant||'',key=JSON.stringify([variant,distance]);
       if(!groups.has(key))groups.set(key,{variant,distance,bestSec:Number(r.durationSec),count:0});
-      const row=groups.get(key);row.count++;row.bestSec=Math.min(row.bestSec,Number(r.durationSec));
+      const row=groups.get(key);row.count+=setCount(r);row.bestSec=Math.min(row.bestSec,Number(r.durationSec));
     }
     return [...groups.values()].sort((a,b)=>a.variant.localeCompare(b.variant)||a.distance-b.distance);
   }
@@ -296,5 +303,5 @@
   function parseDuration(value){const text=String(value).trim();if(!text)return null;let n;if(/^\d+:\d{2}(?:[.,]\d+)?$/.test(text)){const [min,sec]=text.replace(',','.').split(':');if(Number(sec)>=60)throw Error('Секунды после двоеточия: от 00 до 59.');n=Number(min)*60+Number(sec)}else if(/^\d+(?:[.,]\d+)?$/.test(text))n=Number(text.replace(',','.'));else throw Error('Время: секунды или мин:сек, например 5 или 1:30.');if(!Number.isFinite(n)||n>limits.durationSec)throw Error('Слишком большая длительность.');return n}
   function formatDuration(value){if(value===undefined||value===null||value==='')return '';const n=Math.round(Number(value)*1000)/1000,min=Math.floor(n/60),sec=Math.round((n-min*60)*1000)/1000;return min+':'+(sec<10?'0':'')+String(sec)}
 
-  Hybrid.model = { isActual, pendingCount, actualize, parseDuration, formatDuration, attemptBreakdown, distanceResults, fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, template, filled, metrics, dailyMetrics };
+  Hybrid.model = { setCount, isActual, pendingCount, actualize, parseDuration, formatDuration, attemptBreakdown, distanceResults, fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, template, filled, metrics, dailyMetrics };
 })();
