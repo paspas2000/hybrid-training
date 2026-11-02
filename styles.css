@@ -158,3 +158,9 @@
 .record-main.with-sets{display:grid;grid-template-columns:14px minmax(0,1.2fr) minmax(0,1fr) minmax(0,.9fr) 28px;gap:4px}
 .record-main.with-sets>.icon-button{width:28px}
 .circuit-exercise .record-main.with-sets{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.9fr) 28px}
+
+.recording-editor{border:1px solid var(--line);border-radius:12px;padding:12px;margin:16px 0}
+.recording-editor>label{display:grid;gap:6px;margin:10px 0}
+.recording-editor label[hidden]{display:none}
+.exercise-settings>summary{font-size:20px;list-style:none;cursor:pointer}
+.recording-editor input[type=number]{width:100%;min-height:42px}

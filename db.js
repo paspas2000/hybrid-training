@@ -26,7 +26,7 @@
         const tx = connection.transaction(stores, mode);
         let result;
         tx.oncomplete = () => resolve(typeof result === 'function' ? result() : result);
-        tx.onabort = tx.onerror = () => reject(tx.error || new Error('Не удалось сохранить данные.'));
+        tx.onabort = tx.onerror = () => reject(tx.importError || tx.error || new Error('Не удалось сохранить данные.'));
         result = callback(tx);
       } catch (error) { reject(error); }
     });
@@ -53,6 +53,13 @@
     deleteWorkout: id => transaction(['history'], 'readwrite', tx => tx.objectStore('history').delete(id)),
     import: (history, draft, catalog, templates, extra={}) => transaction(['history', 'settings'], 'readwrite', tx => {
       history.forEach(workout => tx.objectStore('history').add(workout));
+      for(const correction of extra.corrections||[]){
+        const request=tx.objectStore('history').get(correction.before.id);
+        request.onsuccess=()=>{try{
+          if(correction.before.id!==correction.after.id||!request.result||JSON.stringify(Hybrid.model.validate(request.result,true))!==JSON.stringify(correction.before))throw Error('Тренировка изменилась после проверки файла. Исправления не применены.');
+          tx.objectStore('history').put(correction.after);
+        }catch(error){tx.importError=error;tx.abort()}};
+      }
       if (draft) tx.objectStore('settings').put(draft, 'draft');
       if (catalog) tx.objectStore('settings').put(catalog, 'catalog');
       if (templates) tx.objectStore('settings').put(templates, 'templates');

@@ -61,7 +61,7 @@ window.Hybrid = {
     jump:{area:'lower',patterns:['squat','jump'],muscles:['quads','glutes','calves','core']},farmer:{area:'full',patterns:['carry'],muscles:['quads','glutes','back','core','grip']},'sled-push':{area:'full',patterns:['locomotion'],muscles:['quads','glutes','calves','shoulders','core']},'sled-pull':{area:'full',patterns:['locomotion','horizontalPull'],muscles:['quads','glutes','back','arms','core']},sandbag:{area:'full',patterns:['carry'],muscles:['quads','glutes','back','core','grip']},burpee:{area:'full',patterns:['squat','horizontalPress'],muscles:['quads','glutes','chest','shoulders','arms','core']},'kb-swing':{area:'full',patterns:['hinge'],muscles:['glutes','hamstrings','back','shoulders','core','grip']},stepup:{area:'lower',patterns:['squat'],muscles:['quads','glutes','calves','core']},ruck:{area:'lower',patterns:['locomotion','carry'],muscles:['quads','glutes','calves','back','core']},'kb-goblet-squat':{area:'lower',patterns:['squat'],muscles:['quads','glutes','core','grip']},'sandbag-shoulder':{area:'full',patterns:['hinge','carry'],muscles:['quads','glutes','hamstrings','back','shoulders','core','grip']},'loaded-hold':{area:'full',patterns:['hold'],muscles:['shoulders','back','core','grip']},'overhead-carry':{area:'full',patterns:['carry'],muscles:['shoulders','back','core','grip']},'battle-ropes':{area:'upper',patterns:['cyclic'],muscles:['shoulders','arms','core']},
     run:{area:'lower',patterns:['locomotion','cyclic'],muscles:['quads','glutes','hamstrings','calves','core']},bike:{area:'lower',patterns:['cyclic'],muscles:['quads','glutes','hamstrings','calves']},rowing:{area:'full',patterns:['cyclic','hinge'],muscles:['quads','glutes','hamstrings','back','arms','core']},swim:{area:'full',patterns:['cyclic'],muscles:['shoulders','back','chest','core']},walk:{area:'lower',patterns:['locomotion','cyclic'],muscles:['quads','glutes','calves','core']},ski:{area:'full',patterns:['cyclic'],muscles:['quads','glutes','back','arms','core']},airbike:{area:'full',patterns:['cyclic'],muscles:['quads','glutes','shoulders','arms','core']},'jump-rope':{area:'lower',patterns:['cyclic','jump'],muscles:['calves','quads','glutes','core']},elliptical:{area:'lower',patterns:['cyclic'],muscles:['quads','glutes','hamstrings','calves']},'xc-ski':{area:'full',patterns:['locomotion','cyclic'],muscles:['quads','glutes','back','arms','core']},'stair-climber':{area:'lower',patterns:['cyclic','squat'],muscles:['quads','glutes','calves','core']}
   },
-  // These are editable starting fields. Every exercise can use every metric.
+  // Legacy field defaults remain available when editing older records.
   presets: {
     'broad-jump': ['distanceM', 'reps'], sprint: ['durationSec', 'distanceM'],
     handstand: ['durationSec'], medball: ['weightKg', 'reps'],
@@ -194,4 +194,47 @@ window.Hybrid = {
  h.defaultVariants.jump=['Без дополнительного веса','С дополнительным весом'];h.defaultVariants['kb-swing']=['Двумя руками','Одной рукой'];h.defaultVariants.medball=['Вперёд','Вверх','Ротационный бросок'];
  h.presets.jump=['reps','addedWeightKg'];h.exerciseProfiles.jump.fields=[...h.presets.jump];
  h.formatLabels={sets:'Подходы',continuous:'Равномерная / непрерывная работа',tempo:'Темповая работа',intervals:'Интервалы',sprintIntervals:'Спринтерские интервалы',circuit:'В составе комплекса'};
+})();
+
+// Recording profiles determine entry fields; saved exercises keep their own snapshot.
+(() => {
+ const h=window.Hybrid;
+ const types={weighted:'Вес и повторы',bodyweight:'Свой вес',repetitions:'Повторы',hold:'Удержание',carry:'Перенос / перемещение',cardio:'Кардио'};
+ const weights={none:'Без веса',total:'Вес целиком',implement:'Вес одного снаряда',added:'Дополнительный вес',plates:'Добавленные блины'};
+ const equipmentNames={bodyweight:'Свой вес',barbell:'Штанга',kettlebell:'Гиря',dumbbell:'Гантель',load:'Груз',machine:'Тренажёр',sandbag:'Мешок',other:'Другое'};
+ function validate(p){
+  if(!p||p.version!==1||!Object.hasOwn(types,p.type)||!Object.hasOwn(weights,p.weight)||!Object.hasOwn(equipmentNames,p.equipment)||!Number.isInteger(p.implements)||p.implements<1||p.implements>10||!['m','km'].includes(p.distanceUnit)||typeof p.distance!=='boolean'||typeof p.time!=='boolean')throw Error('Некорректный профиль записи.');
+  const allowed={weighted:['total','implement'],bodyweight:['added'],repetitions:['none','added'],hold:['none','total','implement'],carry:['total','implement','plates'],cardio:['none']};
+  if(!allowed[p.type].includes(p.weight)||p.weight!=='implement'&&p.implements!==1||p.type==='carry'&&!p.distance||p.type!=='carry'&&p.time||!['carry','cardio'].includes(p.type)&&p.distance)throw Error('Несовместимые поля профиля записи.');
+  return {version:1,type:p.type,weight:p.weight,equipment:p.equipment,implements:p.implements,distanceUnit:p.distanceUnit,distance:p.distance,time:p.time};
+ }
+ const rules=type=>({weighted:'total',bodyweight:'added',repetitions:'none',hold:'none',carry:'total',cardio:'none'}[type]);
+ function create(type='weighted',options={}){return validate({version:1,type,weight:rules(type),equipment:'load',implements:1,distanceUnit:'m',distance:type==='carry'||type==='cardio',time:false,...options})}
+ function fields(p){const w=p.weight==='none'?[]:[p.weight==='added'?'addedWeightKg':'weightKg'];return p.type==='weighted'||p.type==='repetitions'?[...w,'reps']:p.type==='bodyweight'?['reps','addedWeightKg']:p.type==='hold'?[...w,'durationSec']:p.type==='carry'?[...w,'distanceM',...(p.time?['durationSec']:[])]:['durationSec',...(p.distance?['distanceM']:[])]}
+ function weightLabel(p){if(p.weight==='added')return 'Доп. вес, кг';if(p.weight==='plates')return 'Вес блинов, кг';if(p.weight==='implement')return p.equipment==='kettlebell'?'Вес одной гири, кг':p.equipment==='dumbbell'?'Вес одной гантели, кг':'Вес одного снаряда, кг';return p.equipment==='barbell'?'Вес штанги, кг':p.equipment==='sandbag'?'Вес мешка, кг':'Вес груза, кг'}
+ function description(p){return p.weight==='implement'?p.implements+' '+(p.equipment==='kettlebell'?(p.implements===1?'гиря':p.implements<=4?'гири':'гирь'):p.equipment==='dumbbell'?(p.implements===1?'гантель':p.implements<=4?'гантели':'гантелей'):'снаряд(а)'):''}
+ const defaults={};
+ for(const s of h.sections)for(const [id] of s.exercises){
+  const eq=h.equipment[id]||'load';let type='weighted',weight=eq==='kettlebell'?'implement':'total';
+  if(s.id==='endurance'||id==='sprint')type='cardio';
+  if(['broad-jump','vertical-jump','jump','single-leg-hop','direction-jump','explosive-pushup','pogo-jump','jump-lunge','skips','burpee'].includes(id))type='repetitions';
+  if(['pullup','dip','pushup','bodyweight-squat','back-extension'].includes(id))type='bodyweight';
+  if(['handstand','loaded-hold','battle-ropes'].includes(id))type='hold';
+  if(['farmer','sandbag','sled-push','sled-pull','ruck','overhead-carry','shoulder-carry','front-carry'].includes(id))type='carry';
+  if(type==='repetitions')weight=id==='jump'?'added':'none';
+  if(type==='bodyweight')weight='added';
+  if(type==='cardio')weight='none';
+  if(type==='hold')weight=id==='loaded-hold'?'total':'none';
+  let equipment=Object.hasOwn(equipmentNames,eq)?eq:'load';
+  if(['lunge','stepup','bulgarian-split-squat'].includes(id)){equipment='dumbbell';weight='implement'}
+  if(id==='dumbbell-row'){equipment='dumbbell';weight='implement'}
+  if(id==='farmer'){equipment='kettlebell';weight='implement'}
+  if(id==='sled-push'||id==='sled-pull')weight='plates';
+  if(id==='kb-long-cycle')weight='implement';
+  defaults[id]=create(type,{weight,equipment,implements:id==='farmer'||id==='kb-long-cycle'?2:1,distance:type==='carry'||type==='cardio'&&!['jump-rope','stair-climber'].includes(id)});
+ }
+ function resolve(def){return def.recording?validate(def.recording):defaults[def.id]?{...defaults[def.id]}:create(def.bodyweight?'bodyweight':'weighted',{equipment:Object.hasOwn(equipmentNames,def.equipment)?def.equipment:'load',...(!def.bodyweight&&def.equipment==='kettlebell'?{weight:'implement'}:{})})}
+ function key(e,r){const p=e.recording;return !p?r.weightBasis||'':p.weight==='implement'?'implement:'+p.implements+':'+p.equipment:p.weight==='plates'?'plates':p.weight==='total'?'total':r.weightBasis||''}
+ function basisLabel(key){if(key.startsWith('implement:')){const [,n,eq]=key.split(':');return weightLabel({weight:'implement',equipment:eq})+' · '+n+' снаряд(а)'}return {total:'Вес целиком',plates:'Добавленные блины',perHand:'На руку · старая запись',perImplement:'На снаряд · старая запись','':'Как записано раньше'}[key]||key}
+ h.recording={types,weights,equipment:equipmentNames,create,validate,fields,weightLabel,description,defaults,resolve,key,basisLabel};
 })();

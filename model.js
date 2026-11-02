@@ -152,6 +152,7 @@
         }).filter(clean => (!completed||!clean.pending)&&(incomplete || filled(clean)));
         count++;
         const clean = { id, exerciseId: str(exercise.exerciseId, 150, 'ID каталога', true), name: str(exercise.name, 100, 'Название', true), note: str(exercise.note ?? '', 2000, 'Заметка упражнения'), records };
+        if(exercise.recording!==undefined)clean.recording=Hybrid.recording.validate(exercise.recording);
         const variant = str(exercise.variant ?? '', 100, 'Вариант выполнения').trim();
         if (variant) clean.variant = variant;
         if(exercise.rpe!=null&&exercise.rpe!==''){const n=Number(exercise.rpe);if(!Number.isInteger(n)||n<1||n>10)throw Error('Оценка упражнения — от 1 до 10.');clean.rpe=n;}
@@ -249,7 +250,7 @@
     if(successfulWeights.length)result.successfulWeightKgMax=Math.max(...successfulWeights);
     if(values('distanceM').length)result.distanceMMax=max('distanceM');
     const volumeRecords = records.filter(r => rHas(r, 'weightKg') && rHas(r, 'reps'));
-    if (volumeRecords.length && volumeRecords.every(r => !r.weightBasis || r.weightBasis === 'total')) result.volume = volumeRecords.reduce((total, r) => total + Number(r.weightKg) * Number(r.reps) * setCount(r), 0);
+    if (volumeRecords.length && volumeRecords.every(r => exercise.recording?exercise.recording.weight==='total':!r.weightBasis||r.weightBasis==='total')) result.volume = volumeRecords.reduce((total, r) => total + Number(r.weightKg) * Number(r.reps) * setCount(r), 0);
     const paceRecords = records.filter(r => Number(r.durationSec) > 0 && Number(r.distanceM) > 0);
     if (paceRecords.length) result.pace = paceRecords.reduce((a, r) => a + Number(r.durationSec)*setCount(r), 0) / paceRecords.reduce((a, r) => a + Number(r.distanceM)*setCount(r), 0) * 1000 / 60;
     return result;
