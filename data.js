@@ -238,3 +238,66 @@ window.Hybrid = {
  function basisLabel(key){if(key.startsWith('implement:')){const [,n,eq]=key.split(':');return weightLabel({weight:'implement',equipment:eq})+' · '+n+' снаряд(а)'}return {total:'Вес целиком',plates:'Добавленные блины',perHand:'На руку · старая запись',perImplement:'На снаряд · старая запись','':'Как записано раньше'}[key]||key}
  h.recording={types,weights,equipment:equipmentNames,create,validate,fields,weightLabel,description,defaults,resolve,key,basisLabel};
 })();
+
+// The current selection is deliberately smaller than the historical library.
+(() => {
+  const h = window.Hybrid;
+  const addExercise = (id, name, sectionId, referenceId, recording) => {
+    const reference = h.exerciseProfiles[referenceId];
+    h.sections.find(section => section.id === sectionId).exercises.push([id, name]);
+    h.equipment[id] = h.equipment[referenceId];
+    h.presets[id] = h.recording.fields(recording);
+    h.exerciseTraits[id] = JSON.parse(JSON.stringify(h.exerciseTraits[referenceId]));
+    h.exerciseQualities[id] = JSON.parse(JSON.stringify(h.exerciseQualities[referenceId]));
+    h.exerciseProfiles[id] = {...JSON.parse(JSON.stringify(reference)), id, name, sectionId, fields: h.presets[id]};
+    h.recording.defaults[id] = recording;
+  };
+  h.sections.splice(3, 0, {id: 'anaerobic', number: '04', title: 'Работоспособность', subtitle: 'Повторные интенсивные усилия.', exercises: []});
+  h.sections.find(section => section.id === 'skill').title = 'Взрывная мощность';
+  h.sections.find(section => section.id === 'capacity').title = 'Прикладная сила';
+  const endurance = h.sections.find(section => section.id === 'endurance');
+  endurance.title = 'Аэробная выносливость';
+  endurance.number = '05';
+
+  addExercise('trap-bar-deadlift', 'Тяга трэп-грифа', 'strength', 'deadlift', {...h.recording.defaults.deadlift});
+  addExercise('dumbbell-press', 'Жим гантелей стоя', 'strength', 'kb-press', {...h.recording.defaults['kb-press'], equipment: 'dumbbell', implements: 2});
+  addExercise('suitcase-carry', 'Перенос в одной руке', 'capacity', 'farmer', {...h.recording.defaults.farmer, implements: 1});
+  addExercise('medball-side-throw', 'Боковой бросок медбола', 'skill', 'medball', {...h.recording.defaults.medball});
+  addExercise('uphill-walk', 'Ходьба в гору', 'endurance', 'walk', {...h.recording.defaults.walk});
+  addExercise('shuttle-run', 'Челночный бег', 'anaerobic', 'run', {...h.recording.defaults.run});
+
+  const names = {press: 'Армейский жим', medball: 'Бросок медбола вперёд', walk: 'Быстрая ходьба'};
+  for (const section of h.sections) {
+    for (const exercise of section.exercises) {
+      if (names[exercise[0]]) {
+        exercise[1] = names[exercise[0]];
+        h.exerciseProfiles[exercise[0]].name = exercise[1];
+      }
+    }
+  }
+  h.defaultVariants['trap-bar-deadlift'] = ['Высокие ручки', 'Низкие ручки'];
+  h.defaultVariants['dumbbell-press'] = ['Двумя гантелями'];
+  h.defaultVariants['suitcase-carry'] = ['Правая рука', 'Левая рука'];
+  h.defaultVariants.medball = ['Вперёд'];
+  h.defaultVariants['medball-side-throw'] = ['Вправо', 'Влево'];
+  h.defaultVariants.walk = ['Быстрая ходьба'];
+
+  h.catalogGroups = [
+    {id: 'power', title: 'Взрывная мощность', sectionId: 'skill', exerciseIds: ['kb-snatch', 'kb-swing', 'clean', 'barbell-snatch', 'clean-and-jerk', 'barbell-jerk', 'broad-jump', 'vertical-jump', 'medball', 'medball-side-throw']},
+    {id: 'strength', title: 'Сила', sectionId: 'strength', exerciseIds: ['deadlift', 'romanian-deadlift', 'trap-bar-deadlift', 'squat', 'front-squat', 'stepup', 'lunge', 'dumbbell-row', 'row', 'pullup', 'pushup', 'bench', 'sled-push', 'press', 'dumbbell-press']},
+    {id: 'applied', title: 'Прикладная сила', sectionId: 'capacity', exerciseIds: ['farmer', 'suitcase-carry', 'sandbag-shoulder', 'sandbag']},
+    {id: 'repeated', title: 'Повторные интенсивные усилия', sectionId: 'anaerobic', exerciseIds: ['shuttle-run', 'run', 'sled-push']},
+    {id: 'aerobic', title: 'Аэробная выносливость', sectionId: 'endurance', exerciseIds: ['walk', 'uphill-walk', 'bike', 'run']}
+  ];
+  h.equipment['dumbbell-press'] = 'load';
+  h.exerciseProfiles['dumbbell-press'].equipment = ['load'];
+  h.activeExerciseIds = [...new Set(h.catalogGroups.flatMap(group => group.exerciseIds))];
+  const active = new Set(h.activeExerciseIds);
+  for (const [id, profile] of Object.entries(h.exerciseProfiles)) {
+    profile.status = active.has(id) ? 'main' : 'hidden';
+    h.libraryStatus[id] = profile.status;
+  }
+  h.personalLibrary = Object.fromEntries(h.sections.map(section => [section.id, {
+    main: [...new Set(h.catalogGroups.filter(group => group.sectionId === section.id).flatMap(group => group.exerciseIds))], additional: []
+  }]));
+})();

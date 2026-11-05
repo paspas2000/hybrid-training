@@ -174,3 +174,8 @@
 .block-add-actions{display:flex;flex-wrap:wrap;gap:8px}
 .group-panel-head .block-add-actions button{width:auto;min-height:44px;padding:8px 12px}
 #picker-filters{margin:8px 0;font-size:13px}
+
+.block-tile[data-section=anaerobic]{background:#f3d1c7}
+.block-tile strong{overflow-wrap:normal;hyphens:auto}
+
+.block-tile[data-section=anaerobic] strong{font-size:14px;hyphens:none}
