@@ -321,7 +321,7 @@ function renderStats(){
  const grid=$('#activity-grid');grid.replaceChildren();const counts=new Map();history.forEach(w=>counts.set(w.date,(counts.get(w.date)||0)+1));const end=new Date(model.today()+'T12:00:00'),start=new Date(end);start.setDate(start.getDate()-364-((start.getDay()+6)%7));for(let day=new Date(start);day<=end;day.setDate(day.getDate()+1)){const date=day.getFullYear()+'-'+String(day.getMonth()+1).padStart(2,'0')+'-'+String(day.getDate()).padStart(2,'0'),cell=el('span','','activity-cell level-'+Math.min(counts.get(date)||0,4));cell.title=date+': '+(counts.get(date)||0);cell.setAttribute('aria-label',cell.title);grid.append(cell)}
  const activity=$('#activity-grid').parentElement;activity.scrollLeft=activity.scrollWidth;
  const select=$('#stats-exercise'),old=select.value,q=$('#stats-search').value.toLocaleLowerCase('ru').trim(),available=new Map();for(const w of history)for(const s of w.sections)for(const e of s.exercises)available.set(e.exerciseId,e.name);select.replaceChildren(new Option('Выбери упражнение',''));for(const [id,name] of [...available].sort((a,b)=>a[1].localeCompare(b[1],'ru')))if(name.toLocaleLowerCase('ru').includes(q))select.add(new Option(name,id));select.value=[...select.options].some(o=>o.value===old)?old:'';
- renderExerciseOptions();const workout=$('#stats-workout'),previous=workout.value;workout.replaceChildren(new Option('Выбери тренировку',''));sorted().forEach(w=>workout.add(new Option(dateLabel(w.date)+' · '+new Date(w.completedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),w.id)));workout.value=history.some(w=>w.id===previous)?previous:sorted()[0]?.id||'';renderWorkoutStats();renderTimeStats();
+ renderExerciseOptions();const workout=$('#stats-workout'),previous=workout.value;workout.replaceChildren(new Option('Все тренировки',''));sorted().forEach(w=>workout.add(new Option(dateLabel(w.date)+' · '+new Date(w.completedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),w.id)));workout.value=history.some(w=>w.id===previous)?previous:'';renderWorkoutStats();renderTimeStats();
 }
 function renderExerciseOptions(){
  const id=$('#stats-exercise').value,variants=new Set(),bases=new Set();for(const w of history)for(const e of matches(w,id)){variants.add(e.variant||'');for(const r of e.records)if(r.weightKg!==undefined)bases.add(Hybrid.recording.key(e,r))}
@@ -334,7 +334,20 @@ function renderExerciseStats(){
  if(!id){$('#exercise-unit').textContent='';root.replaceChildren(el('p','Выбери упражнение из истории.','muted'));return}const key=metric.value;chart(root,[{title:metricNames[key],color:'#6689ca',points:rows.map(r=>({date:r.date,value:chartValue(key,r.metrics[key]??null)}))}],$('#chart-type').value);$('#exercise-unit').textContent=metricNames[key]||'';
 }
 function renderWorkoutStats(){
- const root=$('#workout-stats');root.replaceChildren();const w=history.find(w=>w.id===$('#stats-workout').value);if(!w)return;const times=sections.map(s=>({section:s,value:Hybrid.timing.blockTotal(w,s.id)})),known=times.filter(t=>t.value!==null),sum=known.reduce((n,t)=>n+t.value,0);
+ const root=$('#workout-stats');root.replaceChildren();
+ const selected=$('#stats-workout').value;
+ const workouts=selected?history.filter(workout=>workout.id===selected):history;
+ if(!workouts.length){root.append(el('p','Пока нет сохранённых тренировок.','muted'));return}
+ const times=sections.map(section=>{
+  const values=workouts.map(workout=>Hybrid.timing.blockTotal(workout,section.id)).filter(value=>value!==null);
+  return {section,value:values.length?values.reduce((total,value)=>total+value,0):null};
+ });
+ const known=times.filter(item=>item.value!==null),sum=known.reduce((total,item)=>total+item.value,0);
+ if(!selected){
+  const measured=workouts.filter(workout=>sections.some(section=>Hybrid.timing.blockTotal(workout,section.id)!==null)).length;
+  root.append(el('p','Тренировок: '+workouts.length+' · с записанным временем: '+measured+' · всего '+model.formatDuration(sum),'chart-caption'));
+ }
+
  if(sum>0){let angle=0;const stops=known.map(t=>{const start=angle;angle+=t.value/sum*360;return blockColors[t.section.id]+' '+start+'deg '+angle+'deg'}),pie=el('div','','time-pie');pie.style.background='conic-gradient('+stops.join(',')+')';pie.setAttribute('role','img');pie.setAttribute('aria-label','Время по блокам: '+known.map(t=>t.section.title+' '+model.formatDuration(t.value)).join(', '));root.append(pie)}else root.append(el('p',known.length?'Записано 0:00.':'Время блоков не записано.','muted'));
  const legend=el('div','','time-legend');for(const {section:s,value} of times){const row=el('div','','time-legend-row');row.style.setProperty('--block-color',blockColors[s.id]);row.append(el('strong',s.title),el('span',value===null?'Нет времени':model.formatDuration(value)));legend.append(row)}root.append(legend);if(known.length<sections.length)root.append(el('p','Секторы показывают только записанное время. Пропуски не считаются нулём.','chart-caption'));
 
