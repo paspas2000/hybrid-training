@@ -284,9 +284,9 @@ window.Hybrid = {
 
   h.catalogGroups = [
     {id: 'power', title: 'Взрывная мощность', sectionId: 'skill', exerciseIds: ['kb-snatch', 'kb-swing', 'clean', 'barbell-snatch', 'clean-and-jerk', 'barbell-jerk', 'broad-jump', 'vertical-jump', 'medball', 'medball-side-throw']},
-    {id: 'strength', title: 'Сила', sectionId: 'strength', exerciseIds: ['deadlift', 'romanian-deadlift', 'trap-bar-deadlift', 'squat', 'front-squat', 'stepup', 'lunge', 'dumbbell-row', 'row', 'pullup', 'pushup', 'bench', 'sled-push', 'press', 'dumbbell-press']},
+    {id: 'strength', title: 'Сила', sectionId: 'strength', exerciseIds: ['deadlift', 'romanian-deadlift', 'squat', 'front-squat', 'stepup', 'lunge', 'dumbbell-row', 'row', 'pullup', 'pushup', 'bench', 'press', 'dumbbell-press']},
     {id: 'applied', title: 'Прикладная сила', sectionId: 'capacity', exerciseIds: ['farmer', 'suitcase-carry', 'sandbag-shoulder', 'sandbag']},
-    {id: 'repeated', title: 'Повторные интенсивные усилия', sectionId: 'anaerobic', exerciseIds: ['shuttle-run', 'run', 'sled-push']},
+    {id: 'repeated', title: 'Повторные интенсивные усилия', sectionId: 'anaerobic', exerciseIds: ['shuttle-run', 'run']},
     {id: 'aerobic', title: 'Аэробная выносливость', sectionId: 'endurance', exerciseIds: ['walk', 'uphill-walk', 'bike', 'run']}
   ];
   h.equipment['dumbbell-press'] = 'load';
@@ -297,6 +297,28 @@ window.Hybrid = {
     profile.status = active.has(id) ? 'main' : 'hidden';
     h.libraryStatus[id] = profile.status;
   }
+  h.personalLibrary = Object.fromEntries(h.sections.map(section => [section.id, {
+    main: [...new Set(h.catalogGroups.filter(group => group.sectionId === section.id).flatMap(group => group.exerciseIds))], additional: []
+  }]));
+})();
+
+// Four blocks are used for new sessions. Five-block records retain their original IDs.
+(() => {
+  const h = window.Hybrid;
+  h.legacySections = h.sections.filter(section => section.id === 'anaerobic');
+  const capacity = h.sections.find(section => section.id === 'capacity');
+  capacity.exercises.push(...h.legacySections.flatMap(section => section.exercises));
+  capacity.title = 'Работоспособность';
+  capacity.subtitle = 'Переносы, комплексы и повторные усилия.';
+  h.sections = h.sections.filter(section => section.id !== 'anaerobic');
+  h.sections.find(section => section.id === 'skill').title = 'Мощность';
+  const endurance = h.sections.find(section => section.id === 'endurance');
+  endurance.title = 'Выносливость';
+  endurance.number = '04';
+  for (const group of h.catalogGroups) {
+    if (group.sectionId === 'anaerobic') group.sectionId = 'capacity';
+  }
+  h.exerciseProfiles['shuttle-run'].sectionId = 'capacity';
   h.personalLibrary = Object.fromEntries(h.sections.map(section => [section.id, {
     main: [...new Set(h.catalogGroups.filter(group => group.sectionId === section.id).flatMap(group => group.exerciseIds))], additional: []
   }]));

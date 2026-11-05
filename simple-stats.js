@@ -13,6 +13,6 @@
    const known=records.filter(r=>Number(r.attempts?.successful)+Number(r.attempts?.failed)>0);if(known.length)metrics.successRate=known.reduce((n,r)=>n+Number(r.attempts.successful),0)/known.reduce((n,r)=>n+Number(r.attempts.successful)+Number(r.attempts.failed),0)*100;
    return {date,metrics};});return rows;
  }
- function timeSeries(history,period){const ws=inRange(history,period),dates=[...new Set(ws.map(w=>w.date))];return h.sections.map(section=>({id:section.id,title:section.title,points:dates.map(date=>{const values=ws.filter(w=>w.date===date).map(w=>h.timing.total(w,section.id)).filter(v=>v!==null);return {date,value:values.length?values.reduce((a,b)=>a+b,0)/60:null}})}))}
+ function timeSeries(history,period){const ws=inRange(history,period),dates=[...new Set(ws.map(w=>w.date))];return h.sections.map(section=>({id:section.id,title:section.title,points:dates.map(date=>{const values=ws.filter(w=>w.date===date).map(w=>h.timing.blockTotal(w,section.id)).filter(v=>v!==null);return {date,value:values.length?values.reduce((a,b)=>a+b,0)/60:null}})}))}
  h.simpleStats={startDate,inRange,exercise,timeSeries};
 })();

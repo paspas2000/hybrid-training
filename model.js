@@ -67,18 +67,20 @@
   const filled = rec => keys.some(key => rec[key] !== undefined && rec[key] !== null && rec[key] !== '') || !!rec.note?.trim() || Number(rec.attempts?.successful)>0 || Number(rec.attempts?.failed)>0 || rec.marked===true;
   function validate(value, completed = false, incomplete = false) {
     if (!value || value.schemaVersion !== 2 || !validDate(value.date) || !Array.isArray(value.sections)) throw new Error('Некорректная структура тренировки.');
-    const knownSections = new Set(Hybrid.sections.map(section => section.id));
+    const definitions = [...Hybrid.sections.slice(0, 3), ...Hybrid.legacySections, ...Hybrid.sections.slice(3)];
+    const knownSections = new Set(definitions.map(section => section.id));
     const suppliedSections = new Map();
     for (const section of value.sections) {
       if (!section || !knownSections.has(section.id) || suppliedSections.has(section.id) || !Array.isArray(section.exercises)) throw Error('Некорректная секция.');
       suppliedSections.set(section.id, section);
     }
-    const isLegacy = value.sections.length === 4 && ['skill', 'strength', 'capacity', 'endurance'].every(id => suppliedSections.has(id));
-    if (!isLegacy && suppliedSections.size !== Hybrid.sections.length) throw Error('Некорректная структура тренировки.');
+    const required = Hybrid.sections.every(section => suppliedSections.has(section.id));
+    if (!required || ![Hybrid.sections.length, definitions.length].includes(suppliedSections.size)) throw Error('Некорректная структура тренировки.');
+    const storedDefinitions = definitions.filter(section => suppliedSections.has(section.id));
     const ids = new Set(); let count = 0;
     const out = { schemaVersion: 2, date: value.date, note: str(value.note, 2000, 'Заметка тренировки'), sections: [] };
     if(value.legacyBlockLayout!==undefined&&typeof value.legacyBlockLayout!=='boolean')throw Error('Некорректная версия блоков.');
-    if(isLegacy||value.legacyBlockLayout)out.legacyBlockLayout=true;
+    if(value.legacyBlockLayout)out.legacyBlockLayout=true;
     if(value.sectionTiming!==undefined)out.sectionTiming=Hybrid.timing.validate(value.sectionTiming,completed);
     if (value.sessionRpe != null && value.sessionRpe !== '') {
       const effort = Number(value.sessionRpe);
@@ -88,7 +90,7 @@
     if (value.sectionRpe != null) {
       if (!value.sectionRpe || typeof value.sectionRpe !== 'object' || Array.isArray(value.sectionRpe)) throw new Error('Некорректные оценки блоков.');
       const ratings = {};
-      for (const section of Hybrid.sections) {
+      for (const section of definitions) {
         const valueForSection = value.sectionRpe[section.id];
         if (valueForSection == null || valueForSection === '') continue;
         const effort = Number(valueForSection);
@@ -109,7 +111,7 @@
         if(group.entryMode!==undefined){if(group.entryMode!=='rounds')throw Error('Некорректный режим комплекса.');clean.entryMode='rounds'}
         if (group.sectionId != null && group.sectionId !== '') {
           const sectionId = str(group.sectionId, 50, 'Секция комплекса', true);
-          if (!Hybrid.sections.some(section => section.id === sectionId)) throw new Error('Некорректная секция комплекса.');
+          if (!definitions.some(section => section.id === sectionId)) throw new Error('Некорректная секция комплекса.');
           clean.sectionId = sectionId;
         }
         if (group.rounds != null && group.rounds !== '') {
@@ -148,7 +150,7 @@
       if (groups.length) out.groups = groups;
     }
     const groupIds = new Set((out.groups || []).map(group => group.id));
-    Hybrid.sections.forEach(definition => {
+    storedDefinitions.forEach(definition => {
       const section = suppliedSections.get(definition.id) || {id: definition.id, exercises: []};
       const exercises = section.exercises.map(exercise => {
         if (!exercise || !Array.isArray(exercise.records) || exercise.records.length > 500) throw new Error('Некорректное упражнение.');

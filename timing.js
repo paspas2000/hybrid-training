@@ -1,6 +1,6 @@
 'use strict';
 (() => {
- const ids=()=>Hybrid.sections.map(s=>s.id),limit=86400000;
+ const ids=()=>[...Hybrid.sections,...Hybrid.legacySections].map(s=>s.id),limit=86400000;
  const stamp=value=>{if(typeof value!=='string'||!Number.isFinite(Date.parse(value)))throw Error('Некорректное время секундомера.');return new Date(value).toISOString()};
  function validate(value,completed=false){
   if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(id=>!ids().includes(id)))throw Error('Некорректное время блоков.');
@@ -18,6 +18,35 @@
  function stopAll(w,now=Date.now()){for(const id of ids()){const t=w.sectionTiming?.[id];if(t?.startedAt){t.elapsedSec=Math.round(total(w,id,now)*1000)/1000;t.stoppedAt=new Date(now).toISOString();delete t.startedAt}}return w}
  function toggle(w,id,now=Date.now()){if(!ids().includes(id))throw Error('Неизвестный блок.');const was=active(w);stopAll(w,now);if(was!==id){w.sectionTiming??={};const t=w.sectionTiming[id]??={elapsedSec:0};t.startedAt=new Date(now).toISOString();t.firstStartedAt??=t.startedAt;}return w}
  function set(w,id,seconds,now=Date.now()){if(!ids().includes(id)||seconds!==null&&(!Number.isFinite(seconds)||seconds<0||seconds>limit))throw Error('Некорректная длительность.');if(seconds===null){if(w.sectionTiming)delete w.sectionTiming[id];return}w.sectionTiming??={};const old=w.sectionTiming[id]||{},running=!!old.startedAt;w.sectionTiming[id]={...old,elapsedSec:seconds,...(running?{startedAt:new Date(now).toISOString()}:{})};}
+ function blockTotal(workout, id, now=Date.now()) {
+  if (id !== 'capacity') return total(workout, id, now);
+  const values = ['capacity', 'anaerobic'].map(key => total(workout, key, now)).filter(value => value !== null);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+ }
+ function activeBlock(workout) {
+  const id = active(workout);
+  return id === 'anaerobic' ? 'capacity' : id;
+ }
+ function toggleBlock(workout, id, now=Date.now()) {
+  if (activeBlock(workout) === id) return stopAll(workout, now);
+  return toggle(workout, id, now);
+ }
+ function setBlock(workout, id, seconds, now=Date.now()) {
+  if (id !== 'capacity' || !workout.sectionTiming?.anaerobic) return set(workout, id, seconds, now);
+  // Correcting the combined value intentionally consolidates its two old timers.
+  if (seconds !== null && (!Number.isFinite(seconds) || seconds < 0 || seconds > limit)) throw Error('Некорректная длительность.');
+  const running = activeBlock(workout) === 'capacity';
+  const stamps = ['capacity', 'anaerobic'].map(key => workout.sectionTiming[key]?.firstStartedAt).filter(Boolean).sort();
+  if (running) stopAll(workout, now);
+  delete workout.sectionTiming.capacity;
+  delete workout.sectionTiming.anaerobic;
+  set(workout, id, seconds, now);
+  if (seconds !== null) {
+    const timer = workout.sectionTiming.capacity;
+    if (stamps.length) timer.firstStartedAt = stamps[0];
+    if (running) timer.startedAt = new Date(now).toISOString();
+  }
+ }
  const has=w=>Object.keys(w.sectionTiming||{}).length>0;
- Hybrid.timing={validate,total,active,stopAll,toggle,set,has};
+ Hybrid.timing={validate,total,active,stopAll,toggle,set,has,blockTotal,activeBlock,toggleBlock,setBlock};
 })();
