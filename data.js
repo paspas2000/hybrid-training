@@ -205,13 +205,13 @@ window.Hybrid = {
  function validate(p){
   if(!p||p.version!==1||!Object.hasOwn(types,p.type)||!Object.hasOwn(weights,p.weight)||!Object.hasOwn(equipmentNames,p.equipment)||!Number.isInteger(p.implements)||p.implements<1||p.implements>10||!['m','km'].includes(p.distanceUnit)||typeof p.distance!=='boolean'||typeof p.time!=='boolean')throw Error('Некорректный профиль записи.');
   const allowed={weighted:['total','implement'],bodyweight:['added'],repetitions:['none','added'],hold:['none','total','implement'],carry:['total','implement','plates'],cardio:['none']};
-  if(!allowed[p.type].includes(p.weight)||p.weight!=='implement'&&p.implements!==1||p.type==='carry'&&!p.distance||p.type!=='carry'&&p.time||!['carry','cardio'].includes(p.type)&&p.distance)throw Error('Несовместимые поля профиля записи.');
+  if(!allowed[p.type].includes(p.weight)||p.weight!=='implement'&&p.implements!==1||p.type==='carry'&&!p.distance||!['carry','repetitions'].includes(p.type)&&p.time||!['carry','cardio'].includes(p.type)&&p.distance)throw Error('Несовместимые поля профиля записи.');
   return {version:1,type:p.type,weight:p.weight,equipment:p.equipment,implements:p.implements,distanceUnit:p.distanceUnit,distance:p.distance,time:p.time};
  }
  const rules=type=>({weighted:'total',bodyweight:'added',repetitions:'none',hold:'none',carry:'total',cardio:'none'}[type]);
  function create(type='weighted',options={}){return validate({version:1,type,weight:rules(type),equipment:'load',implements:1,distanceUnit:'m',distance:type==='carry'||type==='cardio',time:false,...options})}
- function fields(p){const w=p.weight==='none'?[]:[p.weight==='added'?'addedWeightKg':'weightKg'];return p.type==='weighted'||p.type==='repetitions'?[...w,'reps']:p.type==='bodyweight'?['reps','addedWeightKg']:p.type==='hold'?[...w,'durationSec']:p.type==='carry'?[...w,'distanceM',...(p.time?['durationSec']:[])]:['durationSec',...(p.distance?['distanceM']:[])]}
- function weightLabel(p){if(p.weight==='added')return 'Доп. вес, кг';if(p.weight==='plates')return 'Вес блинов, кг';if(p.weight==='implement')return p.equipment==='kettlebell'?'Вес одной гири, кг':p.equipment==='dumbbell'?'Вес одной гантели, кг':'Вес одного снаряда, кг';return p.equipment==='barbell'?'Вес штанги, кг':p.equipment==='sandbag'?'Вес мешка, кг':'Вес груза, кг'}
+ function fields(p){const w=p.weight==='none'?[]:[p.weight==='added'?'addedWeightKg':'weightKg'];return p.type==='weighted'||p.type==='repetitions'?[...w,'reps',...(p.time?['durationSec']:[])]:p.type==='bodyweight'?['reps','addedWeightKg']:p.type==='hold'?[...w,'durationSec']:p.type==='carry'?[...w,'distanceM',...(p.time?['durationSec']:[])]:['durationSec',...(p.distance?['distanceM']:[])]}
+ function weightLabel(p){if(p.weight==='added')return 'Доп. вес, кг';if(p.weight==='plates')return 'Вес блинов, кг';if(p.weight==='implement')return p.equipment==='kettlebell'?'Вес одной гири, кг':p.equipment==='dumbbell'?'Вес одной гантели, кг':p.equipment==='plate'?'Вес одного блина, кг':'Вес одного снаряда, кг';return p.equipment==='barbell'?'Вес штанги, кг':p.equipment==='sandbag'?'Вес мешка, кг':'Вес груза, кг'}
  function description(p){return p.weight==='implement'?p.implements+' '+(p.equipment==='kettlebell'?(p.implements===1?'гиря':p.implements<=4?'гири':'гирь'):p.equipment==='dumbbell'?(p.implements===1?'гантель':p.implements<=4?'гантели':'гантелей'):'снаряд(а)'):''}
  const defaults={};
  for(const s of h.sections)for(const [id] of s.exercises){
@@ -322,4 +322,63 @@ window.Hybrid = {
   h.personalLibrary = Object.fromEntries(h.sections.map(section => [section.id, {
     main: [...new Set(h.catalogGroups.filter(group => group.sectionId === section.id).flatMap(group => group.exerciseIds))], additional: []
   }]));
+})();
+
+(() => {
+  const h = window.Hybrid;
+  const oldStrength = h.sections.find(section => section.id === 'strength');
+  const anaerobic = h.legacySections.find(section => section.id === 'anaerobic');
+  const lowerIds = new Set(['front-squat', 'deadlift', 'zercher-squat', 'romanian-deadlift']);
+  const lowerExercises = oldStrength.exercises.filter(([id]) => lowerIds.has(id) || (h.exerciseTraits[id]?.patterns || []).some(pattern => ['squat', 'hinge'].includes(pattern)));
+  const lowerSet = new Set(lowerExercises.map(([id]) => id));
+  const upperExercises = oldStrength.exercises.filter(([id]) => !lowerSet.has(id));
+  const capacity = h.sections.find(section => section.id === 'capacity');
+  capacity.exercises = capacity.exercises.filter(([id]) => !anaerobic.exercises.some(([known]) => known === id));
+  const burpee = capacity.exercises.find(([id]) => id === 'burpee');
+  capacity.exercises = capacity.exercises.filter(([id]) => id !== 'burpee');
+  anaerobic.exercises.push(burpee);
+
+  const lu = 'lu-raise';
+  upperExercises.push([lu, 'Подъём блинов через стороны (Lu Raises)']);
+  h.recording.equipment.plate = 'Блин';
+  h.equipment[lu] = 'load';
+  h.presets[lu] = ['weightKg', 'reps'];
+  h.exerciseTraits[lu] = {area: 'upper', patterns: [], muscles: ['shoulders']};
+  h.exerciseQualities[lu] = {primary: ['maxStrength'], secondary: ['strengthEndurance']};
+  h.exerciseProfiles[lu] = {...JSON.parse(JSON.stringify(h.exerciseProfiles.press)), id: lu, name: upperExercises.at(-1)[1], sectionId: 'upper', patterns: [], muscles: ['shoulders'], equipment: ['load']};
+  h.recording.defaults[lu] = h.recording.create('weighted', {weight: 'implement', equipment: 'plate', implements: 2});
+  h.recording.defaults.burpee = h.recording.create('repetitions', {equipment: 'bodyweight', time: true});
+
+  h.sections = [
+    {...h.sections.find(section => section.id === 'skill'), number: 'A', title: 'Мощность'},
+    {id: 'lower', number: 'B', title: 'Сила ног', subtitle: 'Основное упражнение на нижнюю часть тела.', exercises: lowerExercises},
+    {id: 'upper', number: 'C', title: 'Сила верха', subtitle: 'Основное упражнение на верхнюю часть тела.', exercises: upperExercises},
+    {...capacity, number: 'D', title: 'Прикладная сила'},
+    {...anaerobic, number: 'E', title: 'Работоспособность'},
+    {...h.sections.find(section => section.id === 'endurance'), number: 'F', title: 'Выносливость'}
+  ];
+  h.legacySections = [{...oldStrength, title: 'Сила — старые записи'}];
+  h.catalogGroups = [
+    {id: 'power', title: 'Основные', sectionId: 'skill', exerciseIds: ['barbell-snatch', 'clean-and-jerk']},
+    {id: 'lower-main', title: 'Основные', sectionId: 'lower', exerciseIds: ['front-squat', 'deadlift']},
+    {id: 'lower-extra', title: 'Дополнительные', sectionId: 'lower', additional: true, exerciseIds: ['zercher-squat', 'romanian-deadlift']},
+    {id: 'upper-main', title: 'Основные', sectionId: 'upper', exerciseIds: ['press', 'bench', 'pullup']},
+    {id: 'upper-extra', title: 'Дополнительные', sectionId: 'upper', additional: true, exerciseIds: ['row', lu]},
+    {id: 'applied', title: 'Основные', sectionId: 'capacity', exerciseIds: ['farmer']},
+    {id: 'repeated', title: 'Основные', sectionId: 'anaerobic', exerciseIds: ['burpee']},
+    {id: 'aerobic', title: 'Основные', sectionId: 'endurance', exerciseIds: ['run']}
+  ];
+  h.activeExerciseIds = [...new Set(h.catalogGroups.flatMap(group => group.exerciseIds))];
+  for (const [id, profile] of Object.entries(h.exerciseProfiles)) {
+    const group = h.catalogGroups.find(group => group.exerciseIds.includes(id));
+    profile.status = group ? (group.additional ? 'additional' : 'main') : 'hidden';
+    h.libraryStatus[id] = profile.status;
+    if (group) profile.sectionId = group.sectionId;
+  }
+  h.personalLibrary = Object.fromEntries(h.sections.map(section => [section.id, {
+    main: h.catalogGroups.filter(group => group.sectionId === section.id && !group.additional).flatMap(group => group.exerciseIds),
+    additional: h.catalogGroups.filter(group => group.sectionId === section.id && group.additional).flatMap(group => group.exerciseIds)
+  }]));
+  h.blockForExercise = id => h.catalogGroups.find(group => group.exerciseIds.includes(id))?.sectionId || (lowerSet.has(id) ? 'lower' : 'upper');
+  h.attemptExerciseIds = ['barbell-snatch', 'clean-and-jerk'];
 })();

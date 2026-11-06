@@ -7,12 +7,14 @@
  const inRange=(history,period,end=h.model.today())=>{const start=startDate(period,end);return history.filter(w=>(!start||w.date>=start)&&w.date<=end).slice().sort((a,b)=>a.date.localeCompare(b.date)||(a.completedAt||'').localeCompare(b.completedAt||''))};
  function exercise(history,id,{period='month',variant='all',basis='all'}={}){
   const groups=new Map();for(const w of inRange(history,period))for(const section of w.sections)for(const e of section.exercises){if(e.exerciseId!==id||variant!=='all'&&(e.variant||'')!==variant)continue;const rs=e.records.filter(r=>h.model.isActual(r)&&(basis==='all'||h.recording.key(e,r)===basis));if(!rs.length)continue;if(!groups.has(w.date))groups.set(w.date,[]);groups.get(w.date).push(...rs.map(r=>({...r,_basis:h.recording.key(e,r)})))}
-  const rows=[...groups].map(([date,records])=>{const values=k=>records.filter(r=>has(r,k)).map(r=>Number(r[k])),sum=k=>records.filter(r=>has(r,k)).reduce((n,r)=>n+Number(r[k])*h.model.setCount(r),0),max=k=>values(k).length?Math.max(...values(k)):null,bases=new Set(records.filter(r=>has(r,'weightKg')).map(r=>r._basis)),metrics={setsCount:records.reduce((n,r)=>n+h.model.setCount(r),0)};
-   if(values('weightKg').length&&bases.size===1)metrics.weightKgMax=max('weightKg');if(values('addedWeightKg').length)metrics.addedWeightKgMax=max('addedWeightKg');for(const k of ['reps','durationSec','distanceM'])if(values(k).length)metrics[k+'Sum']=sum(k);
-   const paired=records.filter(r=>Number(r.durationSec)>0&&Number(r.distanceM)>0);if(paired.length)metrics.pace=paired.reduce((n,r)=>n+Number(r.durationSec)*h.model.setCount(r),0)/paired.reduce((n,r)=>n+Number(r.distanceM)*h.model.setCount(r),0)*1000/60;
-   const known=records.filter(r=>Number(r.attempts?.successful)+Number(r.attempts?.failed)>0);if(known.length)metrics.successRate=known.reduce((n,r)=>n+Number(r.attempts.successful),0)/known.reduce((n,r)=>n+Number(r.attempts.successful)+Number(r.attempts.failed),0)*100;
-   return {date,metrics};});return rows;
+  const allowed = ['setsCount','weightKgMax','addedWeightKgMax','repsSum','durationSecSum','distanceMSum','pace','successfulAttempts','failedAttempts','totalAttempts','successRate'];
+  return [...groups].map(([date, records]) => {
+   const metrics = h.model.metrics({exerciseId: id, records});
+   const bases = new Set(records.filter(record => {const outcome=h.model.attemptOutcome({exerciseId:id},record);return has(record,'weightKg')&&(h.attemptExerciseIds.includes(id)?outcome.successful>0:!(outcome.failed>0&&outcome.successful===0));}).map(record => record._basis));
+   if (bases.size > 1) delete metrics.weightKgMax;
+   return {date, metrics: Object.fromEntries(Object.entries(metrics).filter(([key]) => allowed.includes(key)))};
+  });
  }
- function timeSeries(history,period){const ws=inRange(history,period),dates=[...new Set(ws.map(w=>w.date))];return h.sections.map(section=>({id:section.id,title:section.title,points:dates.map(date=>{const values=ws.filter(w=>w.date===date).map(w=>h.timing.blockTotal(w,section.id)).filter(v=>v!==null);return {date,value:values.length?values.reduce((a,b)=>a+b,0)/60:null}})}))}
+ function timeSeries(history,period){const ws=inRange(history,period),dates=[...new Set(ws.map(w=>w.date))];return h.sections.map(section=>({id:section.id,title:section.title,points:dates.map(date=>{const values=ws.filter(w=>w.date===date).map(w=>h.timing.statTotal(w,section.id)).filter(v=>v!==null);return {date,value:values.length?values.reduce((a,b)=>a+b,0)/60:null}})}))}
  h.simpleStats={startDate,inRange,exercise,timeSeries};
 })();

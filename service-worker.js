@@ -1,6 +1,6 @@
 'use strict';
 // Increase VERSION whenever any app-shell file changes.
-const VERSION = 'v5.5.1';
+const VERSION = 'v6.0.0';
 const PREFIX = 'hybrid-training:' + self.registration.scope + ':';
 const CACHE = PREFIX + VERSION;
 const SHELL = ['./', './index.html', './styles.css', './data.js', './db.js', './model.js', './coach.js', './timing.js', './simple-stats.js', './app.js', './manifest.json', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];

@@ -67,18 +67,22 @@
   const filled = rec => keys.some(key => rec[key] !== undefined && rec[key] !== null && rec[key] !== '') || !!rec.note?.trim() || Number(rec.attempts?.successful)>0 || Number(rec.attempts?.failed)>0 || rec.marked===true;
   function validate(value, completed = false, incomplete = false) {
     if (!value || value.schemaVersion !== 2 || !validDate(value.date) || !Array.isArray(value.sections)) throw new Error('Некорректная структура тренировки.');
-    const definitions = [...Hybrid.sections.slice(0, 3), ...Hybrid.legacySections, ...Hybrid.sections.slice(3)];
+    const definitions = [...Hybrid.sections, ...Hybrid.legacySections];
     const knownSections = new Set(definitions.map(section => section.id));
     const suppliedSections = new Map();
     for (const section of value.sections) {
       if (!section || !knownSections.has(section.id) || suppliedSections.has(section.id) || !Array.isArray(section.exercises)) throw Error('Некорректная секция.');
       suppliedSections.set(section.id, section);
     }
-    const required = Hybrid.sections.every(section => suppliedSections.has(section.id));
-    if (!required || ![Hybrid.sections.length, definitions.length].includes(suppliedSections.size)) throw Error('Некорректная структура тренировки.');
-    const storedDefinitions = definitions.filter(section => suppliedSections.has(section.id));
+    const current = Hybrid.sections.every(section => suppliedSections.has(section.id));
+    const legacy = ['skill', 'strength', 'capacity', 'endurance'].every(id => suppliedSections.has(id));
+    if (!current && !legacy) throw Error('Некорректная структура тренировки.');
+    const storedDefinitions = definitions.filter(section => suppliedSections.has(section.id) || Hybrid.sections.some(active => active.id === section.id));
     const ids = new Set(); let count = 0;
     const out = { schemaVersion: 2, date: value.date, note: str(value.note, 2000, 'Заметка тренировки'), sections: [] };
+    if(value.legacyLayout!==undefined&&!['four','five'].includes(value.legacyLayout))throw Error('Некорректная прежняя структура.');
+    if(value.legacyLayout)out.legacyLayout=value.legacyLayout;
+    else if(suppliedSections.has('strength'))out.legacyLayout=value.legacyBlockLayout||!suppliedSections.has('anaerobic')?'four':'five';
     if(value.legacyBlockLayout!==undefined&&typeof value.legacyBlockLayout!=='boolean')throw Error('Некорректная версия блоков.');
     if(value.legacyBlockLayout)out.legacyBlockLayout=true;
     if(value.sectionTiming!==undefined)out.sectionTiming=Hybrid.timing.validate(value.sectionTiming,completed);
@@ -207,7 +211,7 @@
   }
   function legacy(value, completed = false) {
     if (!value || !(validDate(value.date) || (!completed && value.date === '')) || !Array.isArray(value.items)) throw new Error('Некорректная старая тренировка.');
-    const out = empty(); out.legacyBlockLayout = true; delete out.order; out.date = value.date || today(); out.note = str(value.note ?? '', 2000, 'Заметка');
+    const out = empty(); if(value.items.some(item=>item.sectionId==='strength'))out.sections.push({id:'strength',exercises:[]}); out.legacyLayout='four'; out.legacyBlockLayout = true; delete out.order; out.date = value.date || today(); out.note = str(value.note ?? '', 2000, 'Заметка');
     for (const item of value.items) {
       const section = out.sections.find(s => s.id === item.sectionId);
       if (!section) throw new Error('Неизвестная секция старой тренировки.');
@@ -244,21 +248,36 @@
     if (!out.workout.sections.some(section => section.exercises.length)) throw new Error('Шаблон должен содержать хотя бы одно упражнение.');
     return out;
   }
+  function attemptOutcome(exercise, record) {
+    if (record.pending) return {successful: 0, failed: 0};
+    const weightlifting = Hybrid.attemptExerciseIds.includes(exercise.exerciseId);
+    if (weightlifting && record.reps !== undefined && record.reps !== '' && Number(record.reps) === 0) return {successful: 0, failed: setCount(record)};
+    if (Number(record.attempts?.successful) + Number(record.attempts?.failed) > 0) return {successful: Number(record.attempts.successful), failed: Number(record.attempts.failed)};
+    if (weightlifting && Number(record.reps) > 0) return {successful: setCount(record), failed: 0};
+    return {successful: 0, failed: 0};
+  }
   function metrics(exercise) {
-    const records = (exercise.records || []).filter(r=>!r.pending&&filled(r));
+    const actualRecords = (exercise.records || []).filter(r=>!r.pending&&filled(r));
+    const weightlifting = Hybrid.attemptExerciseIds.includes(exercise.exerciseId);
+    const records = actualRecords.filter(record => {
+      const outcome = attemptOutcome(exercise, record);
+      return weightlifting ? outcome.successful > 0 : !(outcome.failed > 0 && outcome.successful === 0);
+    });
     const values = key => records.map(r => Number(r[key])).filter((n, i) => rHas(records[i], key) && Number.isFinite(n));
     const sum = key => records.filter(r=>rHas(r,key)).reduce((n,r)=>n+Number(r[key])*setCount(r),0);
     const max = key => Math.max(...values(key));
     const result = { setsCount: records.reduce((n,r)=>n+setCount(r),0) };
-    const known=records.filter(r=>r.attempts && r.attempts.successful+r.attempts.failed>0);
-    if (known.length) {
-      result.successfulAttempts=known.reduce((n,r)=>n+r.attempts.successful,0);
-      result.failedAttempts=known.reduce((n,r)=>n+r.attempts.failed,0);
-      result.totalAttempts=result.successfulAttempts+result.failedAttempts;
-      result.successRate=result.successfulAttempts/result.totalAttempts*100;
+    const outcomes = actualRecords.map(record => attemptOutcome(exercise, record));
+    const successful = outcomes.reduce((sum, outcome) => sum + outcome.successful, 0);
+    const failed = outcomes.reduce((sum, outcome) => sum + outcome.failed, 0);
+    if (successful + failed > 0) {
+      result.successfulAttempts = successful;
+      result.failedAttempts = failed;
+      result.totalAttempts = successful + failed;
+      result.successRate = successful / (successful + failed) * 100;
     }
     for (const key of keys) if (values(key).length) result[key === 'weightKg' || key === 'addedWeightKg' ? key + 'Max' : key + 'Sum'] = key === 'weightKg' || key === 'addedWeightKg' ? max(key) : sum(key);
-    const successfulWeights=records.filter(r=>Number(r.attempts?.successful)>0&&rHas(r,'weightKg')).map(r=>Number(r.weightKg));
+    const successfulWeights=records.filter(r=>attemptOutcome(exercise,r).successful>0&&rHas(r,'weightKg')).map(r=>Number(r.weightKg));
     if(successfulWeights.length)result.successfulWeightKgMax=Math.max(...successfulWeights);
     if(values('distanceM').length)result.distanceMMax=max('distanceM');
     const volumeRecords = records.filter(r => rHas(r, 'weightKg') && rHas(r, 'reps'));
@@ -281,7 +300,7 @@
         }
       }
     }
-    return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, records]) => ({ date, metrics: metrics({ records }) }));
+    return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([date, records]) => ({ date, metrics: metrics({ exerciseId, records }) }));
   }
 
   function attemptBreakdown(exercises){
@@ -289,8 +308,8 @@
     for(const e of exercises)for(const r of e.records.filter(r=>!r.pending)){
       const weight=rHas(r,'weightKg')?Number(r.weightKg):null,basis=r.weightBasis||'',variant=e.variant||'',key=JSON.stringify([variant,basis,weight]);
       if(!groups.has(key))groups.set(key,{variant,basis,weight,successful:0,failed:0,unknownRecords:0});
-      const row=groups.get(key),total=Number(r.attempts?.successful||0)+Number(r.attempts?.failed||0);
-      if(total>0){row.successful+=Number(r.attempts.successful);row.failed+=Number(r.attempts.failed)}else row.unknownRecords++;
+      const row=groups.get(key),outcome=attemptOutcome(e,r),total=outcome.successful+outcome.failed;
+      if(total>0){row.successful+=outcome.successful;row.failed+=outcome.failed}else row.unknownRecords++;
     }
     return [...groups.values()].map(row=>({...row,total:row.successful+row.failed,rate:row.successful+row.failed?row.successful/(row.successful+row.failed)*100:null})).sort((a,b)=>a.variant.localeCompare(b.variant)||a.basis.localeCompare(b.basis)||(a.weight??-1)-(b.weight??-1));
   }
@@ -316,5 +335,5 @@
   function parseDuration(value){const text=String(value).trim();if(!text)return null;let n;if(/^\d+:\d{2}(?:[.,]\d+)?$/.test(text)){const [min,sec]=text.replace(',','.').split(':');if(Number(sec)>=60)throw Error('Секунды после двоеточия: от 00 до 59.');n=Number(min)*60+Number(sec)}else if(/^\d+(?:[.,]\d+)?$/.test(text))n=Number(text.replace(',','.'));else throw Error('Время: секунды или мин:сек, например 5 или 1:30.');if(!Number.isFinite(n)||n>limits.durationSec)throw Error('Слишком большая длительность.');return n}
   function formatDuration(value){if(value===undefined||value===null||value==='')return '';const n=Math.round(Number(value)*1000)/1000,min=Math.floor(n/60),sec=Math.round((n-min*60)*1000)/1000;return min+':'+(sec<10?'0':'')+String(sec)}
 
-  Hybrid.model = { setCount, isActual, pendingCount, actualize, parseDuration, formatDuration, attemptBreakdown, distanceResults, fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, template, filled, metrics, dailyMetrics };
+  Hybrid.model = { attemptOutcome, setCount, isActual, pendingCount, actualize, parseDuration, formatDuration, attemptBreakdown, distanceResults, fields, keys, weightBases, bodyweightModes, uid, today, empty, validate, legacy, template, filled, metrics, dailyMetrics };
 })();

@@ -179,3 +179,8 @@
 .block-tile strong{overflow-wrap:normal;hyphens:auto}
 
 .block-tile[data-section=anaerobic] strong{font-size:14px;hyphens:none}
+
+.block-tile[data-section=lower]{background:#d3e0f5}
+.block-tile[data-section=upper]{background:#dee3f5}
+.attempt-legend{display:flex;gap:16px;font-size:13px;margin:8px 0}
+.attempt-legend .success{color:#387b55}.attempt-legend .failure{color:#b84e40}
