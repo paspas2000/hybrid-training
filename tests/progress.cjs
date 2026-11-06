@@ -1,0 +1,16 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const c={window:{},crypto};vm.createContext(c);for(const f of ['data.js','timing.js','model.js','simple-stats.js']){vm.runInContext(fs.readFileSync(f,'utf8'),c);if(f==='data.js')c.Hybrid=c.window.Hybrid}const h=c.Hybrid;
+const date=h.model.today(),exercise=(id,records,recording)=>({exerciseId:id,name:id,records,...(recording?{recording}:{})}),workout=(...exercises)=>({date,sections:[{exercises}]});
+const profile=h.recording.defaults.farmer;
+let rows=h.simpleStats.exercise([workout(exercise('farmer',[{weightKg:32,distanceM:30,sets:2},{weightKg:40,distanceM:10},{weightKg:99,distanceM:99,pending:true}],profile))],'farmer',{period:'all'});
+assert.equal(rows[0].metrics.distanceMSum,70);assert.equal(rows[0].metrics.carryVolume,4640);
+rows=h.simpleStats.exercise([workout(exercise('farmer',[{weightKg:32,distanceM:30,sets:2},{weightKg:40,distanceM:10}],profile))],'farmer',{period:'all',weight:'32'});assert.equal(rows[0].metrics.distanceMSum,60);assert.equal(rows[0].metrics.carryVolume,3840);
+rows=h.simpleStats.exercise([workout(exercise('farmer',[{weightKg:32,distanceM:30}]))],'farmer',{period:'all'});assert.equal(rows[0].metrics.carryVolume,undefined);
+rows=h.simpleStats.exercise([workout(exercise('burpee',[{reps:10,sets:3},{reps:8}]))],'burpee',{period:'all'});assert.equal(rows[0].metrics.repsSum,38);assert.equal(rows[0].metrics.repsMax,10);assert.equal(rows[0].metrics.repsMin,8);
+rows=h.simpleStats.exercise([workout(exercise('run',[{durationSec:900,distanceM:3000},{durationSec:600,distanceM:4000},{durationSec:900,distanceM:5000,pending:true}]))],'run',{period:'all'});assert.equal(rows[0].metrics.run15Distance,3000);
+console.log('PASS: farmer volume with known weight basis, burpee totals and peak, 15-minute runs, pending exclusion.');
+const point=(date,id,records,recording)=>({date,completedAt:date+'T10:00:00Z',sections:[{id:id==='barbell-snatch'?'skill':id==='deadlift'?'lower':id==='run'?'endurance':id==='burpee'?'anaerobic':'capacity',exercises:[exercise(id,records,recording)]}]});
+const history=[point('2026-09-29','deadlift',[{weightKg:10,reps:5}]),point('2026-10-10','deadlift',[{weightKg:100,reps:5},{weightKg:200,reps:1}]),point('2026-10-20','deadlift',[{weightKg:110,reps:5},{weightKg:500,reps:5,pending:true}]),point('2026-10-10','barbell-snatch',[{weightKg:60,reps:1},{weightKg:100,reps:0}]),point('2026-10-20','barbell-snatch',[{weightKg:66,reps:1}]),point('2026-10-10','run',[{durationSec:900,distanceM:3000}]),point('2026-10-20','run',[{durationSec:1200,distanceM:4400}])];
+const progress=h.simpleStats.progress(history,'2026-10-27'),by=id=>progress.find(x=>x.section.id===id).options;
+assert.equal(by('lower').length,1);assert(Math.abs(by('lower')[0].change-10)<1e-8);assert.equal(by('skill')[0].first.value,60);assert(Math.abs(by('skill')[0].change-10)<1e-8);assert(Math.abs(by('endurance')[0].change-10)<1e-8);assert.equal(by('capacity').length,0);
+console.log('PASS: four-week progress, comparable repetitions, failed and pending exclusions, variable-duration running speed and missing data.');

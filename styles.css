@@ -184,3 +184,5 @@
 .block-tile[data-section=upper]{background:#dee3f5}
 .attempt-legend{display:flex;gap:16px;font-size:13px;margin:8px 0}
 .attempt-legend .success{color:#387b55}.attempt-legend .failure{color:#b84e40}
+
+.progress-row{padding:14px 0;border-top:1px solid var(--line)}.progress-head{display:flex;justify-content:space-between;gap:10px;font-size:13px}.progress-value{color:#258250;white-space:nowrap}.progress-value.negative{color:#ad4941}.progress-row select{display:block;width:100%;margin:8px 0;font-size:12px;color:var(--muted)}.progress-track{height:7px;background:#eee;border-radius:8px;overflow:hidden}.progress-bar{height:100%;background:#5ba080;border-radius:8px}.progress-bar.negative{background:#b85e55}.progress-detail{font-size:11px;line-height:1.4;color:var(--muted);margin:6px 0 0}
