@@ -326,15 +326,17 @@ function renderStats(){
  grid.replaceChildren();
  detail.textContent='Нажми на квадрат, чтобы увидеть дату.';
  const counts=new Map();
- const end=new Date(model.today()+'T12:00:00Z'), start=new Date(end);
+ const lastDate=model.today();
+ const end=new Date(lastDate+'T12:00:00Z'), start=new Date(end);
  const days=365;
  start.setUTCDate(start.getUTCDate()-days+1);
- const firstDate=start.toISOString().slice(0,10), lastDate=model.today();
- let total=0;
+ const firstGridDate=start.toISOString().slice(0,10);
+ let firstWorkoutDate=null, total=0;
  for(const workout of history){
-  if(workout.date<firstDate||workout.date>lastDate)continue;
-  counts.set(workout.date,(counts.get(workout.date)||0)+1);
+  if(workout.date>lastDate)continue;
   total++;
+  if(!firstWorkoutDate||workout.date<firstWorkoutDate)firstWorkoutDate=workout.date;
+  if(workout.date>=firstGridDate)counts.set(workout.date,(counts.get(workout.date)||0)+1);
  }
  const firstWeekday=(start.getUTCDay()+6)%7;
  for(let i=0;i<firstWeekday;i++){
@@ -355,7 +357,15 @@ function renderStats(){
   cell.dataset.date=date;
   grid.append(cell);
  }
- $('#activity-average').textContent='В среднем за последние 365 дней — '+new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(total*7/days)+' в неделю';
+ const average=$('#activity-average');
+ if(firstWorkoutDate){
+  const elapsedDays=(end-new Date(firstWorkoutDate+'T12:00:00Z'))/86400000+1;
+  const weekly=total*7/elapsedDays, formatted=fmt(weekly);
+  const unit=formatted.includes(',')?'тренировки':plural(Number(formatted.replace(/\s/g,'')),['тренировка','тренировки','тренировок']);
+  average.textContent='С '+dateLabel(firstWorkoutDate)+' в среднем '+formatted+' '+unit+' в неделю';
+ }else{
+  average.textContent='Среднее появится после первой тренировки.';
+ }
  grid.parentElement.scrollLeft=grid.parentElement.scrollWidth;
  const select=$('#stats-exercise'),old=select.value,q=$('#stats-search').value.toLocaleLowerCase('ru').trim(),available=new Map();for(const w of history)for(const s of w.sections)for(const e of s.exercises)available.set(e.exerciseId,e.name);select.replaceChildren(new Option('Выбери упражнение',''));for(const [id,name] of [...available].sort((a,b)=>a[1].localeCompare(b[1],'ru')))if(name.toLocaleLowerCase('ru').includes(q))select.add(new Option(name,id));select.value=[...select.options].some(o=>o.value===old)?old:'';
  renderExerciseOptions();const workout=$('#stats-workout'),previous=workout.value;workout.replaceChildren(new Option('Все тренировки',''));sorted().forEach(w=>workout.add(new Option(dateLabel(w.date)+' · '+new Date(w.completedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),w.id)));workout.value=history.some(w=>w.id===previous)?previous:'';renderWorkoutStats();renderTimeStats();
