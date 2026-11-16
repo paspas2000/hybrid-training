@@ -322,8 +322,41 @@ function chart(root,series,type='line'){
 }
 function renderStats(){
  renderProgress();
- const grid=$('#activity-grid');grid.replaceChildren();const counts=new Map();history.forEach(w=>counts.set(w.date,(counts.get(w.date)||0)+1));const end=new Date(model.today()+'T12:00:00'),start=new Date(end);start.setDate(start.getDate()-364-((start.getDay()+6)%7));for(let day=new Date(start);day<=end;day.setDate(day.getDate()+1)){const date=day.getFullYear()+'-'+String(day.getMonth()+1).padStart(2,'0')+'-'+String(day.getDate()).padStart(2,'0'),cell=el('span','','activity-cell level-'+Math.min(counts.get(date)||0,4));cell.title=date+': '+(counts.get(date)||0);cell.setAttribute('aria-label',cell.title);grid.append(cell)}
- const activity=$('#activity-grid').parentElement;activity.scrollLeft=activity.scrollWidth;
+ const grid=$('#activity-grid'), detail=$('#activity-date');
+ grid.replaceChildren();
+ detail.textContent='Нажми на квадрат, чтобы увидеть дату.';
+ const counts=new Map();
+ const end=new Date(model.today()+'T12:00:00Z'), start=new Date(end);
+ const days=365;
+ start.setUTCDate(start.getUTCDate()-days+1);
+ const firstDate=start.toISOString().slice(0,10), lastDate=model.today();
+ let total=0;
+ for(const workout of history){
+  if(workout.date<firstDate||workout.date>lastDate)continue;
+  counts.set(workout.date,(counts.get(workout.date)||0)+1);
+  total++;
+ }
+ const firstWeekday=(start.getUTCDay()+6)%7;
+ for(let i=0;i<firstWeekday;i++){
+  const spacer=el('span');
+  spacer.setAttribute('aria-hidden','true');
+  grid.append(spacer);
+ }
+ for(const day=new Date(start);day<=end;day.setUTCDate(day.getUTCDate()+1)){
+  const date=day.toISOString().slice(0,10), count=counts.get(date)||0;
+  const label=dateLabel(date)+' · '+count+' '+plural(count,['тренировка','тренировки','тренировок']);
+  const cell=btn('',()=>{
+   detail.textContent=label;
+   grid.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
+   cell.setAttribute('aria-pressed','true');
+  },'activity-cell level-'+Math.min(count,4),label);
+  cell.title=label;
+  cell.setAttribute('aria-pressed','false');
+  cell.dataset.date=date;
+  grid.append(cell);
+ }
+ $('#activity-average').textContent='В среднем за последние 365 дней — '+new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(total*7/days)+' в неделю';
+ grid.parentElement.scrollLeft=grid.parentElement.scrollWidth;
  const select=$('#stats-exercise'),old=select.value,q=$('#stats-search').value.toLocaleLowerCase('ru').trim(),available=new Map();for(const w of history)for(const s of w.sections)for(const e of s.exercises)available.set(e.exerciseId,e.name);select.replaceChildren(new Option('Выбери упражнение',''));for(const [id,name] of [...available].sort((a,b)=>a[1].localeCompare(b[1],'ru')))if(name.toLocaleLowerCase('ru').includes(q))select.add(new Option(name,id));select.value=[...select.options].some(o=>o.value===old)?old:'';
  renderExerciseOptions();const workout=$('#stats-workout'),previous=workout.value;workout.replaceChildren(new Option('Все тренировки',''));sorted().forEach(w=>workout.add(new Option(dateLabel(w.date)+' · '+new Date(w.completedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),w.id)));workout.value=history.some(w=>w.id===previous)?previous:'';renderWorkoutStats();renderTimeStats();
 }
