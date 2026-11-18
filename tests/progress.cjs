@@ -14,3 +14,17 @@ const history=[point('2026-09-29','deadlift',[{weightKg:10,reps:5}]),point('2026
 const progress=h.simpleStats.progress(history,'2026-10-27'),by=id=>progress.find(x=>x.section.id===id).options;
 assert.equal(by('lower').length,1);assert(Math.abs(by('lower')[0].change-10)<1e-8);assert.equal(by('skill')[0].first.value,60);assert(Math.abs(by('skill')[0].change-10)<1e-8);assert(Math.abs(by('endurance')[0].change-10)<1e-8);assert.equal(by('capacity').length,0);
 console.log('PASS: four-week progress, comparable repetitions, failed and pending exclusions, variable-duration running speed and missing data.');
+
+const sessions = [
+ {id:'a',date:'2026-10-22',sections:[{exercises:[exercise('run',[{durationSec:1200,distanceM:3000,sets:2}]),exercise('run',[{durationSec:1200}])]}]},
+ {id:'b',date:'2026-10-22',sections:[{exercises:[exercise('run',[{durationSec:1800}])]}]},
+ {id:'c',date:'2026-10-21',sections:[{exercises:[exercise('run',[{durationSec:900}]),exercise('farmer',[{weightKg:32}])]}]},
+ {id:'d',date:'2026-11-18',sections:[{exercises:[exercise('run',[{durationSec:900,pending:true}])]}]},
+ {id:'e',date:'2026-11-19',sections:[{exercises:[exercise('run',[{durationSec:900}])]}]}
+];
+const frequencies=h.simpleStats.frequency([...sessions,sessions[0]],'2026-11-18');
+assert.equal(frequencies.get('run').lastDate,'2026-10-22');
+assert.equal(frequencies.get('run').daysAgo,27);
+assert.equal(frequencies.get('run').count28,2);
+assert.equal(frequencies.get('farmer').count28,0);
+assert.equal(h.simpleStats.exercise([workout(exercise('run',[{durationSec:1200,distanceM:3000}]))],'run')[0].metrics.speed,9);

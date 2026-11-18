@@ -2,9 +2,9 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const c={window:{},crypto};vm.createContext(c);for(const file of ['data.js','timing.js','model.js','simple-stats.js']){vm.runInContext(fs.readFileSync(file,'utf8'),c);if(file==='data.js')c.Hybrid=c.window.Hybrid}
 const h=c.Hybrid,m=h.model,t=h.timing;
 assert.deepEqual(Array.from(h.sections,section=>section.id),['skill','lower','upper','capacity','anaerobic','endurance']);
-assert.equal(h.activeExerciseIds.length,14);
+assert.equal(h.activeExerciseIds.length,15);
 assert.equal(h.catalogGroups.filter(group=>!group.additional).reduce((n,group)=>n+group.exerciseIds.length,0),10);
-assert.equal(h.catalogGroups.filter(group=>group.additional).reduce((n,group)=>n+group.exerciseIds.length,0),4);
+assert.equal(h.catalogGroups.filter(group=>group.additional).reduce((n,group)=>n+group.exerciseIds.length,0),5);
 assert.equal(h.recording.weightLabel(h.recording.defaults['lu-raise']),'Вес одного блина, кг');
 assert.deepEqual(Array.from(h.recording.fields(h.recording.defaults.burpee)),['reps','durationSec']);
 const old={schemaVersion:2,date:m.today(),note:'',id:'old',completedAt:new Date().toISOString(),sections:[{id:'skill',exercises:[]},{id:'strength',exercises:[{id:'e',exerciseId:'deadlift',name:'Становая тяга',note:'',records:[{id:'r',weightKg:120,reps:5}]}]},{id:'capacity',exercises:[]},{id:'endurance',exercises:[]}],sectionTiming:{strength:{elapsedSec:120},capacity:{elapsedSec:180},endurance:{elapsedSec:60}}};
@@ -13,4 +13,4 @@ const five=structuredClone(old);five.sections.splice(3,0,{id:'anaerobic',exercis
 const active=m.empty();t.toggleBlock(active,'lower',0);t.toggleBlock(active,'upper',30000);assert.equal(t.total(active,'lower'),30);assert.equal(t.activeBlock(active),'upper');t.stopAll(active,60000);assert.equal(t.total(active,'upper'),30);
 assert.equal(m.template({id:'t',name:'Старый',createdAt:old.completedAt,workout:old}).workout.sections.find(s=>s.id==='strength').exercises[0].records[0].reps,5);
 const bad=structuredClone(old);bad.sections[1].id='unknown';assert.throws(()=>m.validate(bad));const missing=m.empty();missing.sections.pop();assert.throws(()=>m.validate(missing));
-console.log('PASS: six blocks, 10 main/4 additional exercises, Lu Raises/burpee fields, old four/five-block data preserved, unsplit old timers excluded and exclusive clocks.');
+console.log('PASS: six blocks, 10 main/5 additional exercises, Lu Raises/burpee fields, old four/five-block data preserved, unsplit old timers excluded and exclusive clocks.');

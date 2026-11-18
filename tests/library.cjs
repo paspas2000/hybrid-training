@@ -9,9 +9,9 @@ assert(!h.exerciseProfiles['zercher-squat'].patterns.includes('carry'));assert.n
 
 for(const id of ['single-leg-hop','direction-jump','jump-lunge','swim','handstand'])assert.equal(h.libraryStatus[id],'hidden',id);
 for(const id of ['barbell-snatch','clean-and-jerk','front-squat','deadlift','press','bench','pullup','farmer','burpee','run'])assert.equal(h.libraryStatus[id],'main',id);
-for(const id of ['zercher-squat','romanian-deadlift','row','lu-raise'])assert.equal(h.libraryStatus[id],'additional',id);
-assert.equal(h.catalogGroups.length,8);assert.equal(new Set(h.catalogGroups.map(g=>g.id)).size,8);
-assert.deepEqual(Array.from(h.sections,s=>h.catalogGroups.filter(g=>g.sectionId===s.id).length),[1,2,2,1,1,1]);
+for(const id of ['zercher-squat','romanian-deadlift','row','lu-raise','suitcase-carry'])assert.equal(h.libraryStatus[id],'additional',id);
+assert.equal(h.catalogGroups.length,9);assert.equal(new Set(h.catalogGroups.map(g=>g.id)).size,9);
+assert.deepEqual(Array.from(h.sections,s=>h.catalogGroups.filter(g=>g.sectionId===s.id).length),[1,2,2,2,1,1]);
 for(const group of h.catalogGroups){assert.equal(new Set(group.exerciseIds).size,group.exerciseIds.length);for(const id of group.exerciseIds)assert(ids.includes(id),id)}
 assert.equal(h.personalSectionFor('pullup','capacity'),'capacity');assert.equal(h.personalSectionFor('run','lower'),'lower');
 assert.deepEqual(Array.from(h.presets.jump),['reps','addedWeightKg']);assert(h.bodyweightIds.includes('bodyweight-squat'));

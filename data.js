@@ -365,6 +365,7 @@ window.Hybrid = {
     {id: 'upper-main', title: 'Основные', sectionId: 'upper', exerciseIds: ['press', 'bench', 'pullup']},
     {id: 'upper-extra', title: 'Дополнительные', sectionId: 'upper', additional: true, exerciseIds: ['row', lu]},
     {id: 'applied', title: 'Основные', sectionId: 'capacity', exerciseIds: ['farmer']},
+    {id: 'applied-extra', title: 'Дополнительные', sectionId: 'capacity', additional: true, exerciseIds: ['suitcase-carry']},
     {id: 'repeated', title: 'Основные', sectionId: 'anaerobic', exerciseIds: ['burpee']},
     {id: 'aerobic', title: 'Основные', sectionId: 'endurance', exerciseIds: ['run']}
   ];

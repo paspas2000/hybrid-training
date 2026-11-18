@@ -18,6 +18,7 @@
     const totalWeight=r=>{if(r._basis==='total')return Number(r.weightKg);const m=/^implement:(\d+):/.exec(r._basis);return m?Number(r.weightKg)*Number(m[1]):null};
     if(valid.length&&valid.every(r=>totalWeight(r)!==null)){metrics.carryVolume=valid.reduce((sum,r)=>sum+totalWeight(r)*Number(r.distanceM)*h.model.setCount(r),0);allowed.push('carryVolume')}
    }
+   if(id==='run'&&metrics.pace>0){metrics.speed=60/metrics.pace;allowed.push('speed')}
    if(id==='run'){const runs=records.filter(r=>Number(r.durationSec)===900&&has(r,'distanceM'));if(runs.length){metrics.run15Distance=Math.max(...runs.map(r=>Number(r.distanceM)));allowed.push('run15Distance')}}
    return {date, metrics: Object.fromEntries(Object.entries(metrics).filter(([key]) => allowed.includes(key)))};
   });
@@ -42,5 +43,26 @@
   }
   return h.sections.map(section=>({section,options:[...groups.values()].filter(g=>g.block===section.id&&new Set(g.points.map(p=>p.date)).size>=2).map(g=>{const first=g.points[0],last=g.points.at(-1);return {...g,first,last,change:(last.value/first.value-1)*100}})}));
  }
- h.simpleStats={startDate,inRange,exercise,timeSeries,progress};
+ function frequency(history, end=h.model.today()){
+  const today = Date.parse(end+'T00:00:00Z');
+  const dayMs = 86400000;
+  const result = new Map();
+  const seenByWorkout = new Map();
+  for(const workout of history){
+   if(workout.date>end)continue;
+   const daysAgo = (today-Date.parse(workout.date+'T00:00:00Z'))/dayMs;
+   const seen = seenByWorkout.get(workout.id) || new Set();
+   seenByWorkout.set(workout.id,seen);
+   for(const section of workout.sections)for(const {exerciseId,name,records} of section.exercises){
+    if(seen.has(exerciseId)||!records.some(h.model.isActual))continue;
+    seen.add(exerciseId);
+    const item = result.get(exerciseId) || {name,lastDate:workout.date,daysAgo,count28:0};
+    if(daysAgo<item.daysAgo)Object.assign(item,{name,lastDate:workout.date,daysAgo});
+    if(daysAgo<28)item.count28++;
+    result.set(exerciseId,item);
+   }
+  }
+  return result;
+ }
+ h.simpleStats={startDate,inRange,exercise,timeSeries,progress,frequency};
 })();
