@@ -494,23 +494,39 @@ function renderExerciseFrequency(){
  for(const section of sections){
   const main=new Set(Hybrid.personalLibrary[section.id]?.main||[]);
   if(!main.size)continue;
-  const list=el('dl','','exercise-frequency-list');
+  const group=el('section','','frequency-group');
+  group.style.setProperty('--frequency-color',blockColors[section.id]);
+  const list=el('ul','','exercise-frequency-list');
   for(const [id,name] of section.exercises){
    if(!main.has(id))continue;
    const item=frequency.get(id),count=item?.count28??0;
-   const last=item?'Последний раз '+dateLabel(item.lastDate)+' · '+item.daysAgo+' '+plural(item.daysAgo,['день','дня','дней'])+' назад':'Ещё нет записей';
-   const link=btn(name,()=>{
+   let last='Нет записей';
+   if(item){
+    const {daysAgo}=item;
+    const age=daysAgo===0?'сегодня':daysAgo===1?'вчера':
+     daysAgo+' '+plural(daysAgo,['день','дня','дней'])+' назад';
+    last=dateLabel(item.lastDate)+' · '+age;
+   }
+   const openExercise=()=>{
     $('#stats-search').value='';
     renderStatsPicker();
     $('#stats-exercise').value=id;
     renderExerciseOptions();
     $('#stats-exercise').focus();
-   },'text-button');
-   link.disabled=!item;
-   const term=el('dt');term.append(link);
-   list.append(term,el('dd',count+' '+plural(count,['тренировка','тренировки','тренировок'])+' за 4 недели · '+last));
+   };
+   const entry=el('li');
+   const row=item?btn('',openExercise,'frequency-row'):el('div','','frequency-row');
+   const exercise=el('span','','frequency-exercise');
+   exercise.append(el('strong',name),el('span',last,'frequency-last'));
+   const result=el('span',String(count),'frequency-count');
+   result.dataset.zero=String(count===0);
+   result.setAttribute('aria-label',count+' '+plural(count,['тренировка','тренировки','тренировок'])+' за 4 недели');
+   row.append(exercise,result);
+   entry.append(row);
+   list.append(entry);
   }
-  root.append(el('h3',section.title),list);
+  group.append(el('h3',section.title),list);
+  root.append(group);
  }
 }
 function renderExerciseComparison(id,rows,key){

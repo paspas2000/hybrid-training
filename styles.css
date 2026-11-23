@@ -187,16 +187,12 @@
 .attempt-legend .success{color:#387b55}.attempt-legend .failure{color:#b84e40}
 
 
-.exercise-frequency-list dt{font-weight:650;margin-top:10px}
-.exercise-frequency-list dd{margin:2px 0 0;color:var(--muted);font-size:13px}
 
 .block-reminder-card{padding:8px 12px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--white);font-size:13px}
 .block-reminder-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .block-reminder-card p{margin:4px 0 0}
 
 #exercise-comparison p{margin:4px 0}
-#exercise-frequency h3{margin:16px 0 0;font-size:14px}
-#exercise-frequency dl{margin:0 0 10px}
 
 /* Diary layout: compact entry, clear sections, details on demand. */
 
@@ -382,3 +378,59 @@ dialog::backdrop{background:#17172f80;backdrop-filter:none}
 @media(max-width:350px){
  #quick-blocks .block-tile{min-height:66px;padding-inline:8px}
 }
+
+/* Exercise frequency is a list of results, grouped by training block. */
+.frequency-details>summary{
+ border:1px solid var(--ultramarine);
+ padding:8px 12px;
+ background:var(--soft);
+ color:var(--ultramarine);
+ font:850 22px/1.1 var(--display);
+}
+.frequency-details[open]>summary{background:var(--ultramarine);color:#fff}
+.frequency-columns{
+ display:flex;
+ justify-content:space-between;
+ gap:12px;
+ padding:12px 10px 6px;
+ color:var(--muted);
+ font-size:12px;
+ font-weight:650;
+}
+.frequency-columns span:last-child{text-align:right}
+.frequency-group+.frequency-group{margin-top:14px}
+.frequency-group h3{
+ padding:6px 10px;
+ margin:0;
+ background:color-mix(in srgb,var(--frequency-color) 11%,var(--white));
+ border-top:2px solid var(--frequency-color);
+ font:850 19px/1.15 var(--display);
+}
+.exercise-frequency-list{list-style:none;margin:0;padding:0}
+.exercise-frequency-list li{border-bottom:1px solid var(--line)}
+.frequency-row{
+ display:grid;
+ grid-template-columns:minmax(0,1fr) auto;
+ align-items:center;
+ gap:12px;
+ width:100%;
+ min-height:52px;
+ padding:7px 10px;
+ color:var(--ink);
+ background:none;
+ text-align:left;
+}
+.frequency-exercise{display:grid;min-width:0;gap:2px}
+.frequency-exercise strong{font-size:14px;overflow-wrap:anywhere}
+button.frequency-row strong{text-decoration:underline;text-underline-offset:3px}
+button.frequency-row:hover{background:var(--soft)}
+button.frequency-row:focus-visible{outline-offset:-2px}
+.frequency-last{font-size:12px;color:var(--muted)}
+.frequency-count{
+ min-width:2ch;
+ font:850 25px/1 var(--display);
+ font-variant-numeric:tabular-nums;
+ text-align:right;
+ color:var(--ultramarine);
+}
+.frequency-count[data-zero=true]{color:var(--muted);font-weight:650}
