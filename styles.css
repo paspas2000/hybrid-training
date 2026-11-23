@@ -10,7 +10,7 @@
 .unit-label select,#stats-view select{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:8px;color:var(--ink);font-size:14px}
 .record-list{display:grid;gap:10px;margin:12px 0}.record-row{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius);padding:10px}.record-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:8px}.record-head .icon-button{font-size:20px}
 .record-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.record-fields label{display:grid;gap:4px;font-size:11px;font-weight:650}.record-fields input,.record-row>input{width:100%;min-width:0;padding:10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--white);color:var(--ink);font-size:16px}.record-row>input{margin-top:8px}.record-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}.record-actions .secondary{padding:10px 12px;font-size:12px}.record-actions .text-button{font-size:12px}
-#stats-view .panel>label{display:grid;gap:7px;margin:12px 0;font-size:12px;font-weight:700}#stats-view .panel>label select{width:100%}#volume-option{display:flex!important;align-items:center;gap:8px}#volume-option[hidden]{display:none!important}
+#stats-view .stats-body>label{display:grid;gap:7px;margin:12px 0;font-size:12px;font-weight:700}#stats-view .stats-body>label select{width:100%}#volume-option{display:flex!important;align-items:center;gap:8px}#volume-option[hidden]{display:none!important}
 .activity-scroll{overflow-x:auto;padding:6px 0}.activity-grid{display:grid;grid-template-rows:repeat(7,12px);grid-auto-flow:column;grid-auto-columns:12px;gap:3px;width:max-content}.activity-cell{display:block;padding:0;min-width:0;min-height:0;background:#e2e8f0;border-radius:var(--radius)}.activity-cell[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:-1px}
 .activity-cell.level-1{background:#adc5eb}.activity-cell.level-2{background:#7299d1}.activity-cell.level-3{background:#456ca8}.activity-cell.level-4{background:#244d86}
 .chart-bars{height:150px;display:flex;align-items:end;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);padding-top:15px}.chart-bar{background:var(--accent);min-width:10px;flex:1;max-width:35px;border-radius:var(--radius)}.stats-entry{border-top:1px solid var(--line);padding:12px 0}.stats-entry p{margin:4px 0;white-space:pre-wrap}.bottom-nav{gap:0;justify-content:space-around}.bottom-nav button{font-size:11px;min-width:0;padding-left:5px;padding-right:5px}
@@ -225,9 +225,9 @@
 #history-list .history-card{border:0;border-top:1px solid var(--line);border-radius:var(--radius);box-shadow:none;margin:0;background:none}
 #history-list .history-card>summary{padding:14px 0;gap:8px;flex-wrap:wrap}
 #history-list .history-meta{max-width:100%;overflow-wrap:anywhere}
-#stats-view .panel,#data-view .panel{background:none;border:0;border-top:1px solid var(--line);border-radius:var(--radius);box-shadow:none;padding:16px 0;margin:0 0 8px}
-#stats-view .panel h2,#data-view .panel h2{font-size:20px;letter-spacing:-.02em;margin:0 0 8px}
-#stats-view .panel summary,#data-view .panel summary{cursor:pointer;line-height:1.4;min-height:44px;align-content:center}
+#data-view .panel{background:none;border:0;border-top:1px solid var(--line);border-radius:var(--radius);box-shadow:none;padding:16px 0;margin:0 0 8px}
+#data-view .panel h2{font-size:20px;letter-spacing:-.02em;margin:0 0 8px}
+#stats-view .chart-settings summary,#data-view .panel summary{cursor:pointer;line-height:1.4;min-height:44px;align-content:center}
 #stats-view .chart-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
 #stats-view .chart-controls label{grid-column:auto;margin:6px 0}
 #stats-view .chart-settings{margin:2px 0 10px}
@@ -362,7 +362,7 @@ input,textarea{caret-color:var(--ultramarine)}
 .block-clock summary,.block-clock #other-timer,.block-clock #timer-started{color:var(--blue-white)}
 .block-clock input{background:#fff;color:var(--ink)}
 #block-reminder:not([hidden]){margin-bottom:12px}
-#stats-view .panel h2,#data-view .panel h2{font:850 25px/1.1 var(--display)}
+#data-view .panel h2{font:850 25px/1.1 var(--display)}
 #stats-view svg text{font-variant-numeric:tabular-nums}
 .activity-scroll{scrollbar-color:#9890e7 transparent}
 .activity-cell.level-0{background:#e3e2f2}
@@ -380,14 +380,14 @@ dialog::backdrop{background:#17172f80;backdrop-filter:none}
 }
 
 /* Exercise frequency is a list of results, grouped by training block. */
-.frequency-details>summary{
+.stats-section>summary{
  border:1px solid var(--ultramarine);
  padding:8px 12px;
  background:var(--soft);
  color:var(--ultramarine);
  font:850 22px/1.1 var(--display);
 }
-.frequency-details[open]>summary{background:var(--ultramarine);color:#fff}
+.stats-section[open]>summary{background:var(--ultramarine);color:#fff}
 .frequency-columns{
  display:flex;
  justify-content:space-between;
@@ -434,3 +434,19 @@ button.frequency-row:focus-visible{outline-offset:-2px}
  color:var(--ultramarine);
 }
 .frequency-count[data-zero=true]{color:var(--muted);font-weight:650}
+
+
+.stats-section{margin-bottom:8px}
+.stats-section>summary{
+ min-height:48px;
+ align-content:center;
+ cursor:pointer;
+ list-style-position:inside;
+}
+.stats-section>summary:focus-visible{outline-offset:2px}
+.stats-body{
+ padding:4px 12px 14px;
+ border:1px solid var(--line);
+ border-top:0;
+}
+#stats-frequency-panel .stats-body{padding:0}

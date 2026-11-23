@@ -345,7 +345,7 @@ function renderHistory(){
   }
   if(w.note)body.append(el('p',w.note,'note-text'));
   const actions=el('div','','history-actions');
-  actions.append(btn('Время по блокам',()=>{switchView('stats');$('#stats-workout').value=w.id;renderWorkoutStats();$('#stats-workout').focus()},'secondary'));
+  actions.append(btn('Время по блокам',()=>{switchView('stats');$('#stats-workout-panel').open=true;$('#stats-workout').value=w.id;renderWorkoutStats();$('#stats-workout').focus()},'secondary'));
   actions.append(btn('Редактировать',()=>editWorkout(w),'secondary'));
   actions.append(btn('Повторить тренировку',()=>repeatWorkout(w),'secondary'));
   actions.append(btn('Удалить тренировку',()=>deleteWorkout(w),'text-button danger','Удалить тренировку за '+dateLabel(w.date)));
@@ -470,9 +470,16 @@ function renderStats(){
  }else{
   average.textContent='Среднее появится после первой тренировки.';
  }
- grid.parentElement.scrollLeft=grid.parentElement.scrollWidth;
+ scrollActivityToToday();
  renderStatsPicker();const workout=$('#stats-workout'),previous=workout.value;workout.replaceChildren(new Option('Все тренировки',''));sorted().forEach(w=>workout.add(new Option(dateLabel(w.date)+' · '+new Date(w.completedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),w.id)));workout.value=history.some(w=>w.id===previous)?previous:'';renderWorkoutStats();renderTimeStats();
 }
+function scrollActivityToToday(){
+ const scroll=$('#activity-grid').parentElement;
+ scroll.scrollLeft=scroll.scrollWidth;
+}
+$('#stats-activity-panel').addEventListener('toggle',event=>{
+ if(event.currentTarget.open)scrollActivityToToday();
+});
 function renderStatsPicker(){
  const select=$('#stats-exercise'),previous=select.value;
  const query=$('#stats-search').value.toLocaleLowerCase('ru').trim();
@@ -512,6 +519,7 @@ function renderExerciseFrequency(){
     renderStatsPicker();
     $('#stats-exercise').value=id;
     renderExerciseOptions();
+    $('#stats-exercises-panel').open=true;
     $('#stats-exercise').focus();
    };
    const entry=el('li');

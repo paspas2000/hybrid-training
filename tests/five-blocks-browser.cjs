@@ -51,7 +51,7 @@ await page.locator('.record-main input').nth(0).fill('10');
 await page.getByLabel('Время, сек или мин:сек',{exact:true}).fill('0:30');
 await page.locator('#finish').click();await page.waitForFunction(()=>!document.querySelector('#history-view').hidden);
 await page.locator('[data-view=stats]').click();
-await page.locator('#stats-exercise').selectOption('barbell-snatch');
+await page.locator('#stats-exercises-panel > summary').click();await page.locator('#stats-exercise').selectOption('barbell-snatch');
 await page.locator('#exercise-period').selectOption('all');
 assert((await page.locator('#exercise-unit').innerText()).includes('Удачные 2 · неудачные 2'));
 await page.locator('#stats-metric').selectOption('attemptOutcomes');
@@ -76,7 +76,7 @@ const legacy=await page.evaluate(()=>{
 await page.locator('[data-view=data]').click();
 await page.locator('#import-file').setInputFiles({name:'old.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(legacy))});
 await page.locator('#confirm-import').click();await page.getByText('Добавлено тренировок: 1.',{exact:true}).waitFor();
-await page.locator('[data-view=stats]').click();await page.locator('#stats-workout').selectOption('old-four');
+await page.locator('[data-view=stats]').click();await page.locator('#stats-workout-panel > summary').click();await page.locator('#stats-workout').selectOption('old-four');
 assert.equal(await page.locator('.time-legend-row').count(),6);
 assert((await page.locator('.time-legend-row').filter({hasText:'Сила ног'}).innerText()).includes('Нет времени'));
 assert((await page.locator('.time-legend-row').filter({hasText:'Сила верха'}).innerText()).includes('Нет времени'));
